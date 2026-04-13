@@ -57,8 +57,8 @@ export default function Home() {
   const [toolkit, setToolkit] = useState(null); // { fileId, tab }
 
   useEffect(() => {
-    const saved     = localStorage.getItem('sesi_usage');
-    const savedPlan = localStorage.getItem('sesi_plan') || 'free';
+    const saved     = localStorage.getItem('pp_usage');
+    const savedPlan = localStorage.getItem('pp_plan') || 'free';
     if (saved) setUsage(parseInt(saved) || 0);
     setPlan(savedPlan);
   }, []);
@@ -223,11 +223,11 @@ Estrutura:
     if (limitReached) { setShowUpgrade(true); return; }
     if (!canUseProvider(provider)) { setShowProviderUpgrade(true); return; }
     const conteudo = getConteudo();
-    if (!conteudo.trim()) { alert('Adicione o conteúdo ou material de referência antes de gerar.'); return; }
+    if (!conteudo.trim()) { alert('Adicione o conteúdo ou material de referência, Profe — a gente cuida do resto!'); return; }
 
     setLoading(true);
     setResult('');
-    const tabLabels = { plano: 'Plano de Aula', prova: 'Prova', atividade: 'Atividade' };
+    const tabLabels = { plano: 'Plano de Aula', prova: 'Avaliação', atividade: 'Atividade' };
     const disc = tab === 'plano' ? plano.disciplina : tab === 'prova' ? prova.disciplina : atividade.disciplina;
     setResultTitle(`${tabLabels[tab]}${disc ? ' — ' + disc : ''} · ${PROVIDER_LABELS[provider].name}`);
 
@@ -246,7 +246,7 @@ Estrutura:
 
       const newUsage = usage + 1;
       setUsage(newUsage);
-      localStorage.setItem('sesi_usage', newUsage.toString());
+      localStorage.setItem('pp_usage', newUsage.toString());
     } catch (e) {
       setResult('Erro ao gerar: ' + e.message);
     }
@@ -269,8 +269,8 @@ Estrutura:
   return (
     <>
       <Head>
-        <title>Pronto Profe — Assistente do Professor</title>
-        <meta name="description" content="Gerador de planos de aula, provas e atividades com IA para professores" />
+        <title>ProntoProfe — Sua aula pronta, seu tempo de volta.</title>
+        <meta name="description" content="Sua aula pronta, seu tempo de volta. Gerador de planos, provas e atividades com IA para professores." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
@@ -280,14 +280,15 @@ Estrutura:
         <div style={s.header}>
           <div style={s.headerInner}>
             <div style={s.logo}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path d="M12 3L4 7v10l8 4 8-4V7L12 3z" stroke="white" strokeWidth="1.5"/>
-                <path d="M12 3v18M4 7l8 4 8-4" stroke="white" strokeWidth="1.5"/>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M14 3H5a1 1 0 00-1 1v16a1 1 0 001 1h14a1 1 0 001-1V9l-6-6z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+                <path d="M14 3v6h6" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+                <path d="M8 14l2.5 2.5L16 10" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
             <div>
-              <div style={s.appName}>Pronto Profe</div>
-              <div style={s.appSub}>Assistente pedagógico com IA</div>
+              <div style={s.appName}>ProntoProfe</div>
+              <div style={s.appSub}>Sua aula pronta, seu tempo de volta.</div>
             </div>
             <div style={{ flex: 1 }} />
             <div style={s.usageBar}>
@@ -468,12 +469,12 @@ Estrutura:
           >
             {loading ? (
               <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Spinner /> Gerando com {PROVIDER_LABELS[provider].name}...
+                <Spinner /> Preparando tudo pra você, Profe...
               </span>
             ) : limitReached ? (
               '⚠ Limite atingido — faça upgrade para continuar'
             ) : (
-              `✦ Gerar com ${PROVIDER_LABELS[provider].name}`
+              `✓ Prontificar ${{ plano: 'Plano de Aula', prova: 'Prova', atividade: 'Atividade' }[tab]}`
             )}
           </button>
 
@@ -491,7 +492,7 @@ Estrutura:
               </div>
               {loading && (
                 <div style={s.loadingRow}>
-                  <Spinner /><span style={{ color: '#888', fontSize: 14 }}>Aguarde, gerando material...</span>
+                  <Spinner /><span style={{ color: '#888', fontSize: 14 }}>Tudo pronto por aqui, Profe — vai descansar que a gente cuida do resto.</span>
                 </div>
               )}
               {result && <pre style={s.resultText}>{result}</pre>}
@@ -510,8 +511,8 @@ Estrutura:
               </div>
               <div style={s.modalSub}>
                 {showProviderUpgrade
-                  ? 'Para usar ChatGPT e outros provedores, faça upgrade para o plano Pro.'
-                  : 'Você usou todas as 10 gerações gratuitas do mês. Faça upgrade para continuar.'}
+                  ? 'Para usar ChatGPT e outros provedores premium, faça upgrade para o plano Pro. Você merece as melhores ferramentas!'
+                  : 'Você usou todas as 10 gerações gratuitas do mês. Seu esforço merece mais — faça upgrade e continue criando sem limite.'}
               </div>
               <div style={s.planCards}>
                 {[
@@ -524,7 +525,7 @@ Estrutura:
                     <div style={s.planDesc}>{p.desc}</div>
                     <button style={{ ...s.btnPlan, background: p.color }} onClick={() => {
                       setPlan(p.key);
-                      localStorage.setItem('sesi_plan', p.key);
+                      localStorage.setItem('pp_plan', p.key);
                       setShowUpgrade(false);
                       setShowProviderUpgrade(false);
                       alert(`Plano ${PLAN_LABELS[p.key].name} ativado! Em produção, aqui entraria o checkout do Stripe.`);
