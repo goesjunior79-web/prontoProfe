@@ -269,7 +269,7 @@ Estrutura:
   return (
     <>
       <Head>
-        <title>Mão Amiga — Assistente do Professor</title>
+        <title>Pronto Profe — Assistente do Professor</title>
         <meta name="description" content="Gerador de planos de aula, provas e atividades com IA para professores" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
@@ -286,7 +286,7 @@ Estrutura:
               </svg>
             </div>
             <div>
-              <div style={s.appName}>Mão Amiga</div>
+              <div style={s.appName}>Pronto Profe</div>
               <div style={s.appSub}>Assistente pedagógico com IA</div>
             </div>
             <div style={{ flex: 1 }} />
