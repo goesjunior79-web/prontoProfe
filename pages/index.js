@@ -20,7 +20,7 @@ const PROVIDER_LABELS = {
 
 const PLAN_LABELS = {
   free:   { name: 'Gratuito', color: '#6B5B8A', limit: '10/mês',    bg: '#EDE6F7' },
-  pro:    { name: 'Pro',      color: '#4A3B63', limit: '150/mês',   bg: '#D9D0EE' },
+  pro:    { name: 'Pro',      color: '#3D348B', limit: '150/mês',   bg: '#D9D0EE' },
   school: { name: 'Escola',   color: '#fff',    limit: 'Ilimitado', bg: '#FF7F50' },
 };
 
@@ -910,8 +910,8 @@ const s = {
   page:        { minHeight: '100vh', background: '#F8F8F8', fontFamily: "'Inter', 'Quicksand', sans-serif" },
   header:      { background: '#fff', borderBottom: '0.5px solid #E0D8F0', position: 'sticky', top: 0, zIndex: 100 },
   headerInner: { maxWidth: 860, margin: '0 auto', padding: '12px 1rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
-  logo:        { width: 36, height: 36, borderRadius: 8, background: '#4A3B63', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  appName:     { fontSize: 15, fontWeight: 600, color: '#4A3B63', lineHeight: 1.2 },
+  logo:        { width: 36, height: 36, borderRadius: 8, background: '#3D348B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  appName:     { fontSize: 15, fontWeight: 600, color: '#3D348B', lineHeight: 1.2 },
   appSub:      { fontSize: 11, color: '#9B8BB0' },
   usageBar:    { display: 'flex', flexDirection: 'column', minWidth: 140 },
   usageText:   { fontSize: 11, color: '#9B8BB0' },
@@ -932,19 +932,19 @@ const s = {
   // ── Tabs ──
   tabs:      { display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' },
   tab:       { padding: '7px 16px', borderRadius: 20, border: '0.5px solid #D8CEE8', fontSize: 13, fontWeight: 500, cursor: 'pointer', background: 'transparent', color: '#9B8BB0' },
-  tabActive: { background: '#4A3B63', color: '#fff', borderColor: '#4A3B63' },
+  tabActive: { background: '#3D348B', color: '#fff', borderColor: '#3D348B' },
 
   // ── Formulário ──
   card:    { background: '#fff', border: '0.5px solid #E0D8F0', borderRadius: 12, padding: '1.25rem', marginBottom: 14 },
   grid3:   { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 },
   grid2:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
   label:   { fontSize: 11, fontWeight: 600, color: '#9B8BB0', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' },
-  select:  { width: '100%', padding: '8px 10px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, background: '#fff', color: '#4A3B63' },
-  input:   { width: '100%', padding: '8px 10px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', color: '#4A3B63' },
-  textarea:  { width: '100%', minHeight: 100, padding: '10px 12px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6, color: '#4A3B63' },
+  select:  { width: '100%', padding: '8px 10px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, background: '#fff', color: '#3D348B' },
+  input:   { width: '100%', padding: '8px 10px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', color: '#3D348B' },
+  textarea:  { width: '100%', minHeight: 100, padding: '10px 12px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6, color: '#3D348B' },
   chipGroup: { display: 'flex', flexWrap: 'wrap', gap: 6 },
   chip:      { padding: '5px 12px', borderRadius: 20, border: '0.5px solid #D8CEE8', fontSize: 13, cursor: 'pointer', background: 'transparent', color: '#6B5B8A' },
-  chipSel:   { background: '#EDE6F7', color: '#4A3B63', borderColor: '#C3B1E1', fontWeight: 600 },
+  chipSel:   { background: '#EDE6F7', color: '#3D348B', borderColor: '#C3B1E1', fontWeight: 600 },
 
   // ── Botões ──
   btnGenerate: { width: '100%', padding: '13px', background: '#FF7F50', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 14, letterSpacing: '0.01em' },
@@ -953,10 +953,10 @@ const s = {
   // ── Resultado ──
   resultBox:    { background: '#fff', border: '0.5px solid #E0D8F0', borderRadius: 12, padding: '1.25rem' },
   resultHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  resultTitle:  { fontSize: 14, fontWeight: 600, color: '#4A3B63' },
+  resultTitle:  { fontSize: 14, fontWeight: 600, color: '#3D348B' },
   btnSm:        { padding: '5px 12px', fontSize: 12, borderRadius: 6, border: '0.5px solid #D8CEE8', background: '#fff', color: '#6B5B8A', cursor: 'pointer' },
   loadingRow:   { display: 'flex', alignItems: 'center', gap: 10, padding: '1rem 0', color: '#9B8BB0' },
-  resultText:   { fontSize: 14, color: '#4A3B63', lineHeight: 1.75, whiteSpace: 'pre-wrap', fontFamily: 'inherit' },
+  resultText:   { fontSize: 14, color: '#3D348B', lineHeight: 1.75, whiteSpace: 'pre-wrap', fontFamily: 'inherit' },
 
   spinner: { display: 'inline-flex', gap: 4, alignItems: 'center' },
   dot:     { width: 7, height: 7, borderRadius: '50%', background: '#FF7F50', display: 'inline-block', animation: 'bounce 0.8s infinite', animationFillMode: 'both' },
@@ -972,7 +972,7 @@ const s = {
   fileThumb:    { width: 36, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 },
   filePdfIcon:  { width: 36, height: 36, background: '#FF7F50', color: '#fff', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 },
   fileInfo:     { flex: 1, minWidth: 0 },
-  fileName:     { fontSize: 13, fontWeight: 500, color: '#4A3B63', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  fileName:     { fontSize: 13, fontWeight: 500, color: '#3D348B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   fileMeta:     { fontSize: 11, color: '#9B8BB0', marginTop: 1 },
   fileWarnBadge:{ color: '#FF7F50' },
   fileNote:     { fontSize: 11, color: '#9B8BB0', marginTop: 6 },
@@ -980,17 +980,17 @@ const s = {
   btnFileRm:    { padding: '4px 8px', background: 'transparent', border: '0.5px solid #D8CEE8', borderRadius: 5, fontSize: 12, cursor: 'pointer', color: '#9B8BB0' },
 
   // ── Toolkit ──
-  toolkitFileInfo: { background: '#F8F8F8', border: '0.5px solid #E0D8F0', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#4A3B63' },
+  toolkitFileInfo: { background: '#F8F8F8', border: '0.5px solid #E0D8F0', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#3D348B' },
 
   // ── Modal ──
   modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(74,59,99,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' },
   modal:        { background: '#fff', borderRadius: 16, padding: '1.5rem', maxWidth: 480, width: '100%' },
-  modalTitle:   { fontSize: 18, fontWeight: 600, color: '#4A3B63', marginBottom: 8 },
+  modalTitle:   { fontSize: 18, fontWeight: 600, color: '#3D348B', marginBottom: 8 },
   modalSub:     { fontSize: 14, color: '#6B5B8A', marginBottom: 20, lineHeight: 1.5 },
   planCards:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 },
   planCard:     { border: '2px solid', borderRadius: 10, padding: '1rem' },
   planName:     { fontSize: 13, fontWeight: 600, marginBottom: 4 },
-  planPrice:    { fontSize: 20, fontWeight: 600, color: '#4A3B63', marginBottom: 4 },
+  planPrice:    { fontSize: 20, fontWeight: 600, color: '#3D348B', marginBottom: 4 },
   planDesc:     { fontSize: 12, color: '#6B5B8A', marginBottom: 12, lineHeight: 1.4 },
   btnPlan:      { width: '100%', padding: '8px', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   modalClose:   { width: '100%', padding: '8px', background: 'transparent', border: '0.5px solid #D8CEE8', borderRadius: 6, fontSize: 13, color: '#9B8BB0', cursor: 'pointer' },
