@@ -766,6 +766,8 @@ function FileUploadZone({ files, provider, onAdd, onRemove, onOptimize }) {
 }
 
 function FileItem({ file, onRemove, onOptimize }) {
+  const showSplit = file.type === 'pdf';
+  const showCompress = file.type === 'img' && file.needsOptimize;
   return (
     <div style={s.fileItem}>
       {file.type === 'img' && file.preview
@@ -776,13 +778,18 @@ function FileItem({ file, onRemove, onOptimize }) {
         <div style={s.fileName} title={file.name}>{file.name}</div>
         <div style={s.fileMeta}>
           {formatBytes(file.size)}
-          {file.pageCount ? ` · ${file.pageCount} páginas` : ''}
-          {file.needsOptimize && <span style={s.fileWarnBadge}> · arquivo grande</span>}
+          {file.pageCount ? ` · ${file.pageCount} págs.` : ''}
+          {file.needsOptimize && !showSplit && <span style={s.fileWarnBadge}> · arquivo grande</span>}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        {file.needsOptimize && (
-          <button style={s.btnFileOpt} onClick={() => onOptimize(file)} title="Reduzir arquivo">
+        {showSplit && (
+          <button style={{ ...s.btnFileOpt, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => onOptimize(file)} title="Dividir PDF">
+            ✂ <span style={{ fontSize: 11 }}>Dividir</span>
+          </button>
+        )}
+        {showCompress && (
+          <button style={s.btnFileOpt} onClick={() => onOptimize(file)} title="Comprimir imagem">
             🔧
           </button>
         )}
@@ -794,15 +801,31 @@ function FileItem({ file, onRemove, onOptimize }) {
   );
 }
 
-// ── Ferramenta de Redução ─────────────────────────────────────────────────
+// ── Ferramenta de Divisão / Compressão ───────────────────────────────────
+
+function getPdfPresets(total) {
+  if (!total || total < 2) return [];
+  const half = Math.ceil(total / 2);
+  const presets = [
+    { label: `1ª metade (1–${half})`,       from: 1,      to: half  },
+    { label: `2ª metade (${half+1}–${total})`, from: half+1, to: total },
+  ];
+  if (total >= 10) presets.push({ label: 'Primeiras 10 págs.', from: 1, to: 10 });
+  if (total >= 5)  presets.push({ label: 'Primeiras 5 págs.',  from: 1, to: 5  });
+  return presets.filter(p => p.from <= p.to && p.from >= 1 && p.to <= total);
+}
 
 function ToolkitModal({ file, onClose, onApply }) {
+  const isImage = file.type === 'img';
+  const total   = file.pageCount || 1;
+
   const [quality,    setQuality]    = useState(70);
-  const [pageRange,  setPageRange]  = useState('');
+  const [fromPage,   setFromPage]   = useState(1);
+  const [toPage,     setToPage]     = useState(Math.min(total, 10));
   const [processing, setProcessing] = useState(false);
 
-  const isImage = file.type === 'img';
-  const estSize = isImage ? Math.round(file.size * (quality / 100) * 0.65) : null;
+  const estSize    = isImage ? Math.round(file.size * (quality / 100) * 0.65) : null;
+  const pagesCount = Math.max(0, toPage - fromPage + 1);
 
   const handleCompress = async () => {
     setProcessing(true);
@@ -816,26 +839,26 @@ function ToolkitModal({ file, onClose, onApply }) {
   };
 
   const handleExtract = async () => {
-    if (!pageRange.trim()) { alert('Informe o intervalo de páginas.'); return; }
     setProcessing(true);
     try {
-      const res = await extractPdfPages(file.b64, pageRange, file.pageCount);
+      const res = await extractPdfPages(file.b64, `${fromPage}-${toPage}`, file.pageCount);
       onApply({ b64: res.b64, size: res.size, pageCount: res.pageCount, needsOptimize: false });
     } catch (e) {
-      alert('Erro ao extrair páginas: ' + e.message);
+      alert('Erro ao recortar: ' + e.message);
       setProcessing(false);
     }
   };
 
+  const applyPreset = (p) => { setFromPage(p.from); setToPage(p.to); };
+
   return (
     <div style={s.modalOverlay} onClick={onClose}>
       <div style={s.modal} onClick={e => e.stopPropagation()}>
+
+        {/* Cabeçalho */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={s.modalTitle}>🔧 Ferramenta de Redução</div>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999', lineHeight: 1, padding: '0 4px' }}
-          >✕</button>
+          <div style={s.modalTitle}>{isImage ? '🖼 Comprimir Imagem' : '✂ Dividir PDF'}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999', lineHeight: 1, padding: '0 4px' }}>✕</button>
         </div>
 
         <div style={s.toolkitFileInfo}>
@@ -844,52 +867,86 @@ function ToolkitModal({ file, onClose, onApply }) {
           {file.pageCount && <span style={{ color: '#999', fontWeight: 400 }}> · {file.pageCount} páginas</span>}
         </div>
 
-        {/* Imagem — compressão por qualidade */}
+        {/* ── Imagem ── */}
         {isImage && (
           <>
             <label style={{ ...s.label, marginTop: 16 }}>Qualidade da imagem</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-              <input
-                type="range" min="30" max="90" step="5" value={quality}
-                onChange={e => setQuality(parseInt(e.target.value))}
-                style={{ flex: 1 }}
-              />
+              <input type="range" min="30" max="90" step="5" value={quality}
+                onChange={e => setQuality(parseInt(e.target.value))} style={{ flex: 1 }} />
               <span style={{ fontSize: 14, fontWeight: 600, minWidth: 38 }}>{quality}%</span>
             </div>
             <div style={{ fontSize: 12, color: '#888', marginBottom: 20 }}>
-              Tamanho estimado após compressão: ~{formatBytes(estSize)}
+              Tamanho estimado: ~{formatBytes(estSize)}
             </div>
-            <button
-              style={{ ...s.btnGenerate, marginBottom: 0, ...(processing ? s.btnDisabled : {}) }}
-              onClick={handleCompress}
-              disabled={processing}
-            >
+            <button style={{ ...s.btnGenerate, marginBottom: 0, ...(processing ? s.btnDisabled : {}) }}
+              onClick={handleCompress} disabled={processing}>
               {processing ? 'Comprimindo...' : 'Comprimir e substituir'}
             </button>
           </>
         )}
 
-        {/* PDF — seleção de páginas */}
+        {/* ── PDF ── */}
         {!isImage && (
           <>
-            <label style={{ ...s.label, marginTop: 16 }}>
-              Páginas a manter{file.pageCount ? ` (total: ${file.pageCount} páginas)` : ''}
-            </label>
-            <input
-              style={s.input}
-              value={pageRange}
-              onChange={e => setPageRange(e.target.value)}
-              placeholder="Ex: 1-10  ou  1,3,5-8  ou  2"
-            />
-            <div style={{ fontSize: 12, color: '#888', margin: '6px 0 20px' }}>
-              Use hífen para intervalos (1-5) e vírgula para páginas avulsas (1,3,7).
+            {/* Total de páginas em destaque */}
+            {file.pageCount && (
+              <div style={{ textAlign: 'center', padding: '16px 0 8px' }}>
+                <div style={{ fontSize: 38, fontWeight: 700, color: '#3D348B', lineHeight: 1 }}>{file.pageCount}</div>
+                <div style={{ fontSize: 12, color: '#9B8BB0', marginTop: 2 }}>páginas no total</div>
+              </div>
+            )}
+
+            {/* Presets rápidos */}
+            {getPdfPresets(file.pageCount).length > 0 && (
+              <>
+                <div style={{ ...s.label, marginTop: 8 }}>Seleções rápidas</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+                  {getPdfPresets(file.pageCount).map(p => (
+                    <button key={p.label}
+                      style={{ ...s.chip, ...(fromPage === p.from && toPage === p.to ? s.chipSel : {}) }}
+                      onClick={() => applyPreset(p)}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Seleção manual */}
+            <div style={{ ...s.label }}>Ou escolha as páginas</div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: '#9B8BB0', marginBottom: 5 }}>DA PÁGINA</div>
+                <input type="number" min={1} max={total} style={{ ...s.input, textAlign: 'center', fontSize: 18, fontWeight: 700 }}
+                  value={fromPage}
+                  onChange={e => {
+                    const v = Math.max(1, Math.min(total, parseInt(e.target.value) || 1));
+                    setFromPage(v);
+                    if (toPage < v) setToPage(v);
+                  }} />
+              </div>
+              <div style={{ fontSize: 22, color: '#C3B1E1', paddingBottom: 10, flexShrink: 0 }}>→</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: '#9B8BB0', marginBottom: 5 }}>ATÉ A PÁGINA</div>
+                <input type="number" min={fromPage} max={total} style={{ ...s.input, textAlign: 'center', fontSize: 18, fontWeight: 700 }}
+                  value={toPage}
+                  onChange={e => {
+                    const v = Math.max(fromPage, Math.min(total, parseInt(e.target.value) || fromPage));
+                    setToPage(v);
+                  }} />
+              </div>
             </div>
-            <button
-              style={{ ...s.btnGenerate, marginBottom: 0, ...(processing ? s.btnDisabled : {}) }}
-              onClick={handleExtract}
-              disabled={processing}
-            >
-              {processing ? 'Extraindo...' : 'Extrair páginas selecionadas'}
+
+            {/* Preview */}
+            <div style={{ background: '#EDE6F7', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#3D348B', marginBottom: 20, textAlign: 'center' }}>
+              ✓ Você ficará com <strong>{pagesCount} {pagesCount === 1 ? 'página' : 'páginas'}</strong>
+              {file.pageCount && <span style={{ color: '#9B8BB0' }}> de {file.pageCount}</span>}
+            </div>
+
+            <button style={{ ...s.btnGenerate, marginBottom: 0, ...(processing ? s.btnDisabled : {}) }}
+              onClick={handleExtract} disabled={processing}>
+              {processing ? 'Recortando o PDF...' : `✂ Usar páginas ${fromPage} a ${toPage}`}
             </button>
           </>
         )}
