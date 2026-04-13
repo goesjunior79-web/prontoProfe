@@ -1,0 +1,19 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 540px) {
+  .grid3 { grid-template-columns: 1fr !important; }
+  .grid2 { grid-template-columns: 1fr !important; }
+  .plan-cards { grid-template-columns: 1fr !important; }
+}
