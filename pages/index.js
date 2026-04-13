@@ -19,9 +19,9 @@ const PROVIDER_LABELS = {
 };
 
 const PLAN_LABELS = {
-  free:   { name: 'Gratuito', color: '#5F5E5A', limit: '10/mês',    bg: '#F1EFE8' },
-  pro:    { name: 'Pro',      color: '#0C447C', limit: '150/mês',   bg: '#E6F1FB' },
-  school: { name: 'Escola',   color: '#3C3489', limit: 'Ilimitado', bg: '#EEEDFE' },
+  free:   { name: 'Gratuito', color: '#6B5B8A', limit: '10/mês',    bg: '#EDE6F7' },
+  pro:    { name: 'Pro',      color: '#4A3B63', limit: '150/mês',   bg: '#D9D0EE' },
+  school: { name: 'Escola',   color: '#fff',    limit: 'Ilimitado', bg: '#FF7F50' },
 };
 
 // Quais provedores aceitam quais tipos de arquivo
@@ -906,86 +906,92 @@ const SERIES_AGRUPADAS = ['EF I (1º ao 5º)', 'EF II (6º ao 9º)', '1º EM', '
 // ── Estilos ───────────────────────────────────────────────────────────────
 
 const s = {
-  page:        { minHeight: '100vh', background: '#F7F6F3', fontFamily: 'system-ui, -apple-system, sans-serif' },
-  header:      { background: '#fff', borderBottom: '0.5px solid #E0DDD5', position: 'sticky', top: 0, zIndex: 100 },
+  // ── Layout ──
+  page:        { minHeight: '100vh', background: '#F8F8F8', fontFamily: "'Inter', 'Quicksand', sans-serif" },
+  header:      { background: '#fff', borderBottom: '0.5px solid #E0D8F0', position: 'sticky', top: 0, zIndex: 100 },
   headerInner: { maxWidth: 860, margin: '0 auto', padding: '12px 1rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
-  logo:        { width: 36, height: 36, borderRadius: 8, background: '#003DA5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  appName:     { fontSize: 15, fontWeight: 500, color: '#1a1a18', lineHeight: 1.2 },
-  appSub:      { fontSize: 11, color: '#888' },
+  logo:        { width: 36, height: 36, borderRadius: 8, background: '#4A3B63', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  appName:     { fontSize: 15, fontWeight: 600, color: '#4A3B63', lineHeight: 1.2 },
+  appSub:      { fontSize: 11, color: '#9B8BB0' },
   usageBar:    { display: 'flex', flexDirection: 'column', minWidth: 140 },
-  usageText:   { fontSize: 11, color: '#888' },
-  progressTrack: { height: 4, background: '#E8E6DF', borderRadius: 2, overflow: 'hidden' },
+  usageText:   { fontSize: 11, color: '#9B8BB0' },
+  progressTrack: { height: 4, background: '#EDE6F7', borderRadius: 2, overflow: 'hidden' },
   progressFill:  { height: '100%', borderRadius: 2, transition: 'width 0.3s' },
-  planBadge:   { fontSize: 10, fontWeight: 500, padding: '1px 7px', borderRadius: 20 },
-  btnUpgrade:  { padding: '6px 14px', background: '#003DA5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' },
+  planBadge:   { fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20 },
+  btnUpgrade:  { padding: '6px 14px', background: '#FF7F50', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
 
   main: { maxWidth: 860, margin: '0 auto', padding: '1.25rem 1rem' },
 
+  // ── Seletor de IA ──
   aiSelector:      { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' },
-  aiSelectorLabel: { fontSize: 12, fontWeight: 500, color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em' },
+  aiSelectorLabel: { fontSize: 12, fontWeight: 600, color: '#9B8BB0', textTransform: 'uppercase', letterSpacing: '0.04em' },
   aiButtons:       { display: 'flex', gap: 6, flexWrap: 'wrap' },
-  aiBtn:           { padding: '6px 14px', borderRadius: 20, border: '0.5px solid #D3D1C7', fontSize: 13, fontWeight: 500, cursor: 'pointer', background: 'transparent', color: '#5F5E5A', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 5 },
+  aiBtn:           { padding: '6px 14px', borderRadius: 20, border: '0.5px solid #D8CEE8', fontSize: 13, fontWeight: 500, cursor: 'pointer', background: 'transparent', color: '#6B5B8A', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 5 },
   lockIcon:        { fontSize: 11 },
 
+  // ── Tabs ──
   tabs:      { display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' },
-  tab:       { padding: '7px 16px', borderRadius: 20, border: '0.5px solid #D3D1C7', fontSize: 13, fontWeight: 500, cursor: 'pointer', background: 'transparent', color: '#888' },
-  tabActive: { background: '#003DA5', color: '#fff', borderColor: '#003DA5' },
+  tab:       { padding: '7px 16px', borderRadius: 20, border: '0.5px solid #D8CEE8', fontSize: 13, fontWeight: 500, cursor: 'pointer', background: 'transparent', color: '#9B8BB0' },
+  tabActive: { background: '#4A3B63', color: '#fff', borderColor: '#4A3B63' },
 
-  card:    { background: '#fff', border: '0.5px solid #E0DDD5', borderRadius: 12, padding: '1.25rem', marginBottom: 14 },
+  // ── Formulário ──
+  card:    { background: '#fff', border: '0.5px solid #E0D8F0', borderRadius: 12, padding: '1.25rem', marginBottom: 14 },
   grid3:   { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 },
   grid2:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  label:   { fontSize: 11, fontWeight: 500, color: '#888', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' },
-  select:  { width: '100%', padding: '8px 10px', border: '0.5px solid #D3D1C7', borderRadius: 8, fontSize: 14, background: '#fff', color: '#1a1a18' },
-  input:   { width: '100%', padding: '8px 10px', border: '0.5px solid #D3D1C7', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' },
-  textarea:  { width: '100%', minHeight: 100, padding: '10px 12px', border: '0.5px solid #D3D1C7', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6 },
+  label:   { fontSize: 11, fontWeight: 600, color: '#9B8BB0', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' },
+  select:  { width: '100%', padding: '8px 10px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, background: '#fff', color: '#4A3B63' },
+  input:   { width: '100%', padding: '8px 10px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', color: '#4A3B63' },
+  textarea:  { width: '100%', minHeight: 100, padding: '10px 12px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6, color: '#4A3B63' },
   chipGroup: { display: 'flex', flexWrap: 'wrap', gap: 6 },
-  chip:      { padding: '5px 12px', borderRadius: 20, border: '0.5px solid #D3D1C7', fontSize: 13, cursor: 'pointer', background: 'transparent', color: '#5F5E5A' },
-  chipSel:   { background: '#E6F1FB', color: '#0C447C', borderColor: '#185FA5', fontWeight: 500 },
+  chip:      { padding: '5px 12px', borderRadius: 20, border: '0.5px solid #D8CEE8', fontSize: 13, cursor: 'pointer', background: 'transparent', color: '#6B5B8A' },
+  chipSel:   { background: '#EDE6F7', color: '#4A3B63', borderColor: '#C3B1E1', fontWeight: 600 },
 
-  btnGenerate: { width: '100%', padding: '13px', background: '#003DA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 500, cursor: 'pointer', marginBottom: 14, letterSpacing: '0.01em' },
-  btnDisabled: { background: '#B4B2A9', cursor: 'default' },
+  // ── Botões ──
+  btnGenerate: { width: '100%', padding: '13px', background: '#FF7F50', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 14, letterSpacing: '0.01em' },
+  btnDisabled: { background: '#C8BFD4', cursor: 'default' },
 
-  resultBox:    { background: '#fff', border: '0.5px solid #E0DDD5', borderRadius: 12, padding: '1.25rem' },
+  // ── Resultado ──
+  resultBox:    { background: '#fff', border: '0.5px solid #E0D8F0', borderRadius: 12, padding: '1.25rem' },
   resultHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  resultTitle:  { fontSize: 14, fontWeight: 500, color: '#1a1a18' },
-  btnSm:        { padding: '5px 12px', fontSize: 12, borderRadius: 6, border: '0.5px solid #D3D1C7', background: '#fff', color: '#5F5E5A', cursor: 'pointer' },
-  loadingRow:   { display: 'flex', alignItems: 'center', gap: 10, padding: '1rem 0', color: '#888' },
-  resultText:   { fontSize: 14, color: '#1a1a18', lineHeight: 1.75, whiteSpace: 'pre-wrap', fontFamily: 'inherit' },
+  resultTitle:  { fontSize: 14, fontWeight: 600, color: '#4A3B63' },
+  btnSm:        { padding: '5px 12px', fontSize: 12, borderRadius: 6, border: '0.5px solid #D8CEE8', background: '#fff', color: '#6B5B8A', cursor: 'pointer' },
+  loadingRow:   { display: 'flex', alignItems: 'center', gap: 10, padding: '1rem 0', color: '#9B8BB0' },
+  resultText:   { fontSize: 14, color: '#4A3B63', lineHeight: 1.75, whiteSpace: 'pre-wrap', fontFamily: 'inherit' },
 
   spinner: { display: 'inline-flex', gap: 4, alignItems: 'center' },
-  dot:     { width: 7, height: 7, borderRadius: '50%', background: '#003DA5', display: 'inline-block', animation: 'bounce 0.8s infinite', animationFillMode: 'both' },
+  dot:     { width: 7, height: 7, borderRadius: '50%', background: '#FF7F50', display: 'inline-block', animation: 'bounce 0.8s infinite', animationFillMode: 'both' },
 
-  // Upload de arquivos
+  // ── Upload de arquivos ──
   fileZone:     { marginTop: 4 },
-  fileDropArea: { border: '1.5px dashed #D3D1C7', borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', background: '#FAFAF8', transition: 'border-color 0.15s, background 0.15s', userSelect: 'none' },
-  fileDropDrag: { borderColor: '#003DA5', background: '#EEF4FF' },
-  fileDropText: { fontSize: 13, color: '#888', display: 'flex', flexDirection: 'column', gap: 2 },
-  fileDropSub:  { fontSize: 11, color: '#AAA' },
+  fileDropArea: { border: '1.5px dashed #D8CEE8', borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', background: '#FDFCFF', transition: 'border-color 0.15s, background 0.15s', userSelect: 'none' },
+  fileDropDrag: { borderColor: '#C3B1E1', background: '#EDE6F7' },
+  fileDropText: { fontSize: 13, color: '#9B8BB0', display: 'flex', flexDirection: 'column', gap: 2 },
+  fileDropSub:  { fontSize: 11, color: '#C3B1E1' },
   fileList:     { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 },
-  fileItem:     { display: 'flex', alignItems: 'center', gap: 10, background: '#F7F6F3', border: '0.5px solid #E0DDD5', borderRadius: 8, padding: '8px 10px' },
+  fileItem:     { display: 'flex', alignItems: 'center', gap: 10, background: '#F8F8F8', border: '0.5px solid #E0D8F0', borderRadius: 8, padding: '8px 10px' },
   fileThumb:    { width: 36, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 },
-  filePdfIcon:  { width: 36, height: 36, background: '#A32D2D', color: '#fff', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 },
+  filePdfIcon:  { width: 36, height: 36, background: '#FF7F50', color: '#fff', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 },
   fileInfo:     { flex: 1, minWidth: 0 },
-  fileName:     { fontSize: 13, fontWeight: 500, color: '#1a1a18', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  fileMeta:     { fontSize: 11, color: '#888', marginTop: 1 },
-  fileWarnBadge:{ color: '#BA7517' },
-  fileNote:     { fontSize: 11, color: '#888', marginTop: 6 },
-  btnFileOpt:   { padding: '4px 8px', background: '#FFF3CD', border: '0.5px solid #E8C84C', borderRadius: 5, fontSize: 13, cursor: 'pointer' },
-  btnFileRm:    { padding: '4px 8px', background: 'transparent', border: '0.5px solid #D3D1C7', borderRadius: 5, fontSize: 12, cursor: 'pointer', color: '#888' },
+  fileName:     { fontSize: 13, fontWeight: 500, color: '#4A3B63', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  fileMeta:     { fontSize: 11, color: '#9B8BB0', marginTop: 1 },
+  fileWarnBadge:{ color: '#FF7F50' },
+  fileNote:     { fontSize: 11, color: '#9B8BB0', marginTop: 6 },
+  btnFileOpt:   { padding: '4px 8px', background: '#EDE6F7', border: '0.5px solid #C3B1E1', borderRadius: 5, fontSize: 13, cursor: 'pointer' },
+  btnFileRm:    { padding: '4px 8px', background: 'transparent', border: '0.5px solid #D8CEE8', borderRadius: 5, fontSize: 12, cursor: 'pointer', color: '#9B8BB0' },
 
-  // Toolkit
-  toolkitFileInfo: { background: '#F7F6F3', border: '0.5px solid #E0DDD5', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#1a1a18' },
+  // ── Toolkit ──
+  toolkitFileInfo: { background: '#F8F8F8', border: '0.5px solid #E0D8F0', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#4A3B63' },
 
-  // Modal (compartilhado)
-  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' },
+  // ── Modal ──
+  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(74,59,99,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' },
   modal:        { background: '#fff', borderRadius: 16, padding: '1.5rem', maxWidth: 480, width: '100%' },
-  modalTitle:   { fontSize: 18, fontWeight: 500, color: '#1a1a18', marginBottom: 8 },
-  modalSub:     { fontSize: 14, color: '#5F5E5A', marginBottom: 20, lineHeight: 1.5 },
+  modalTitle:   { fontSize: 18, fontWeight: 600, color: '#4A3B63', marginBottom: 8 },
+  modalSub:     { fontSize: 14, color: '#6B5B8A', marginBottom: 20, lineHeight: 1.5 },
   planCards:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 },
   planCard:     { border: '2px solid', borderRadius: 10, padding: '1rem' },
-  planName:     { fontSize: 13, fontWeight: 500, marginBottom: 4 },
-  planPrice:    { fontSize: 20, fontWeight: 500, color: '#1a1a18', marginBottom: 4 },
-  planDesc:     { fontSize: 12, color: '#5F5E5A', marginBottom: 12, lineHeight: 1.4 },
-  btnPlan:      { width: '100%', padding: '8px', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer' },
-  modalClose:   { width: '100%', padding: '8px', background: 'transparent', border: '0.5px solid #D3D1C7', borderRadius: 6, fontSize: 13, color: '#888', cursor: 'pointer' },
+  planName:     { fontSize: 13, fontWeight: 600, marginBottom: 4 },
+  planPrice:    { fontSize: 20, fontWeight: 600, color: '#4A3B63', marginBottom: 4 },
+  planDesc:     { fontSize: 12, color: '#6B5B8A', marginBottom: 12, lineHeight: 1.4 },
+  btnPlan:      { width: '100%', padding: '8px', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  modalClose:   { width: '100%', padding: '8px', background: 'transparent', border: '0.5px solid #D8CEE8', borderRadius: 6, fontSize: 13, color: '#9B8BB0', cursor: 'pointer' },
 };

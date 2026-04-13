@@ -1,5 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Quicksand:wght@500;600&display=swap');
+
 * {
   box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', 'Quicksand', sans-serif;
 }
 
 html, body {
