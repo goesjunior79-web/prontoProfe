@@ -269,8 +269,8 @@ Estrutura:
   return (
     <>
       <Head>
-        <title>SESI Edu — Assistente do Professor</title>
-        <meta name="description" content="Gerador de planos de aula, provas e atividades com IA para a rede SESI" />
+        <title>Mão Amiga — Assistente do Professor</title>
+        <meta name="description" content="Gerador de planos de aula, provas e atividades com IA para professores" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
@@ -286,7 +286,7 @@ Estrutura:
               </svg>
             </div>
             <div>
-              <div style={s.appName}>SESI Edu</div>
+              <div style={s.appName}>Mão Amiga</div>
               <div style={s.appSub}>Assistente pedagógico com IA</div>
             </div>
             <div style={{ flex: 1 }} />
