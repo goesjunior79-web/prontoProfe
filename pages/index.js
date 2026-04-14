@@ -241,7 +241,7 @@ Estrutura:
       });
       const data = await res.json();
       if (data.error === 'upgrade_required') { setShowUpgrade(true); setLoading(false); return; }
-      if (!res.ok) throw new Error(data.message || 'Erro desconhecido');
+      if (!res.ok) throw new Error(data.detail || data.message || 'Erro desconhecido');
       setResult(data.result);
 
       const newUsage = usage + 1;
