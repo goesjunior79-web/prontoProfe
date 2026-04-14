@@ -14,7 +14,7 @@ const PLAN_LIMITS = {
 
 // Modelos por provedor
 const PROVIDER_MODELS = {
-  claude: 'claude-sonnet-4-20250514',
+  claude: 'claude-3-5-sonnet-20241022',
   openai: 'gpt-4o',
   gemini: 'gemini-2.0-flash',
   copilot: 'gpt-4-turbo', // Azure OpenAI
@@ -103,11 +103,12 @@ export default async function handler(req, res) {
     return res.status(200).json({ result, provider, model: PROVIDER_MODELS[provider] });
 
   } catch (error) {
-    console.error('Erro ao chamar provedor:', provider, error.message);
+    const detail = error?.message || error?.toString() || 'erro desconhecido';
+    console.error('Erro ao chamar provedor:', provider, detail);
     return res.status(500).json({
       error: 'api_error',
       message: 'Erro ao gerar conteúdo. Tente novamente.',
-      detail: error.message,
+      detail,
     });
   }
 }
