@@ -18,6 +18,10 @@ html, body {
   40% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (max-width: 540px) {
   .grid3 { grid-template-columns: 1fr !important; }
   .grid2 { grid-template-columns: 1fr !important; }

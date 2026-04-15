@@ -1,6 +1,8 @@
 // pages/index.js
 import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
+import ExportButtons from '../components/ExportButtons';
+import CloudSaveButtons from '../components/CloudSaveButtons';
 
 const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
 
@@ -38,13 +40,14 @@ const FILE_MAX  = 5 * 1024 * 1024; // 5 MB — rejeita
 export default function Home() {
   const [tab, setTab] = useState('plano');
   const [plan, setPlan] = useState('free');
-  const [provider, setProvider] = useState('claude');
+  const [provider, setProvider] = useState('gemini');
   const [usage, setUsage] = useState(0);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showProviderUpgrade, setShowProviderUpgrade] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
   const [resultTitle, setResultTitle] = useState('');
+  const [resultModel, setResultModel] = useState('');
   const [copied, setCopied] = useState(false);
 
   const [plano, setPlano] = useState({ disciplina: '', serie: '', duracao: '50 min', metodos: [], conteudo: '' });
@@ -243,6 +246,7 @@ Estrutura:
       if (data.error === 'upgrade_required') { setShowUpgrade(true); setLoading(false); return; }
       if (!res.ok) throw new Error(data.detail || data.message || 'Erro desconhecido');
       setResult(data.result);
+      setResultModel(data.model || '');
 
       const newUsage = usage + 1;
       setUsage(newUsage);
@@ -496,6 +500,20 @@ Estrutura:
                 </div>
               )}
               {result && <pre style={s.resultText}>{result}</pre>}
+              <ExportButtons
+                result={result}
+                title={resultTitle}
+                loading={loading}
+                provider={provider}
+                model={resultModel}
+              />
+              <CloudSaveButtons
+                result={result}
+                title={resultTitle}
+                loading={loading}
+                provider={provider}
+                model={resultModel}
+              />
             </div>
           )}
         </div>

@@ -48,17 +48,47 @@ export default async function handler(req, res) {
     });
   }
 
+  // Verificar chave da API antes de chamar o provedor
+  const KEY_MAP = {
+    claude:  'ANTHROPIC_API_KEY',
+    openai:  'OPENAI_API_KEY',
+    gemini:  'GEMINI_API_KEY',
+    copilot: 'AZURE_OPENAI_KEY',
+  };
+  const requiredKey = KEY_MAP[provider];
+  if (requiredKey && !process.env[requiredKey]) {
+    return res.status(500).json({
+      error: 'api_error',
+      message: `Chave de API não configurada para ${provider}.`,
+      detail: `A variável ${requiredKey} não está definida no servidor. Adicione-a ao arquivo .env.local.`,
+    });
+  }
+
+  // Mock temporário — ativo quando NEXT_PUBLIC_MOCK_AI=true (sem créditos de API)
+  if (process.env.NEXT_PUBLIC_MOCK_AI === 'true') {
+    const mockResult = `**[MOCK] Resposta simulada do provedor: ${provider}**\n\n` +
+      `Este é um conteúdo de teste gerado localmente, sem consumir créditos de API.\n\n` +
+      `**Prompt recebido:**\n${prompt}\n\n` +
+      `**Arquivos anexados:** ${files.length > 0 ? files.map(f => f.name).join(', ') : 'nenhum'}\n\n` +
+      `Para usar a API real, remova ou defina \`NEXT_PUBLIC_MOCK_AI=false\` no arquivo \`.env.local\`.`;
+    return res.status(200).json({ result: mockResult, provider, model: `mock-${PROVIDER_MODELS[provider]}` });
+  }
+
   try {
     let result = '';
 
     if (provider === 'claude') {
       const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
       const messages = buildAnthropicMessages(prompt, files);
-      const response = await client.messages.create({
-        model: PROVIDER_MODELS.claude,
-        max_tokens: 3500,
-        messages,
-      });
+      const hasPdf = files.some(f => f.type === 'pdf');
+      const response = await client.messages.create(
+        {
+          model: PROVIDER_MODELS.claude,
+          max_tokens: 3500,
+          messages,
+        },
+        hasPdf ? { headers: { 'anthropic-beta': 'pdfs-2024-09-25' } } : {},
+      );
       result = response.content[0]?.text || '';
 
     } else if (provider === 'openai') {
