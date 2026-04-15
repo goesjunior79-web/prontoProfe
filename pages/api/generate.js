@@ -14,7 +14,7 @@ const PLAN_LIMITS = {
 
 // Modelos por provedor
 const PROVIDER_MODELS = {
-  claude: 'claude-3-5-sonnet-20241022',
+  claude: 'claude-sonnet-4-5',
   openai: 'gpt-4o',
   gemini: 'gemini-2.0-flash',
   copilot: 'gpt-4-turbo', // Azure OpenAI
