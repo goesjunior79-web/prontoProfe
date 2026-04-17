@@ -18,6 +18,9 @@ build/
 # vercel
 .vercel
 
+# claude code
+.claude/
+
 # misc
 .DS_Store
 *.pem
@@ -25,5 +28,8 @@ npm-debug.log*
 
 # zip
 *.zip
+
+# scripts de instalação/distribuição
+instalar.ps1
 
 .env*.local

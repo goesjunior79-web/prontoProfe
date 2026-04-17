@@ -1,46 +1,63 @@
-// pages/api/generate.js
-// Rota de servidor — a chave de API NUNCA chega ao navegador
-
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from './auth/[...nextauth]';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getOrCreateProfile, incrementUsage } from '../../lib/db/profile';
+import { saveGeneration } from '../../lib/db/history';
 
-// Limites por plano (gerações por mês)
-const PLAN_LIMITS = {
-  free: 10,
-  pro: 150,
-  school: Infinity,
-};
+const SESI_SYSTEM_PROMPT = `Você é um especialista em educação da rede SESI (Serviço Social da Indústria) do Brasil.
 
-// Modelos por provedor
+Ao criar materiais pedagógicos, siga SEMPRE estas diretrizes:
+- Use linguagem clara, objetiva e adequada à faixa etária dos alunos
+- Baseie-se na Base Nacional Comum Curricular (BNCC) e nas competências socioemocionais SESI
+- Mantenha formatação profissional, consistente e de fácil leitura
+- Escreva em português brasileiro formal, sem erros gramaticais
+- Estruture o conteúdo com títulos em MAIÚSCULAS para as seções principais
+- Para provas: use o formato QUESTÃO 01, QUESTÃO 02... com alternativas A) B) C) D) e inclua GABARITO ao final
+- Para planos de aula: siga a estrutura SESI padrão com identificação, objetivos, sequência didática e avaliação
+- Para atividades: inclua título, objetivo, materiais, instruções claras e critérios de avaliação
+- Seja completo e detalhado — não deixe seções incompletas`;
+
+const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
+
 const PROVIDER_MODELS = {
-  claude: 'claude-sonnet-4-5',
-  openai: 'gpt-4o',
-  gemini: 'gemini-2.0-flash',
-  copilot: 'gpt-4-turbo', // Azure OpenAI
+  claude:  'claude-sonnet-4-6',
+  openai:  'gpt-4o',
+  gemini:  'gemini-2.0-flash',
+  copilot: 'gpt-4-turbo',
 };
 
-// Planos que podem usar cada provedor
 const PROVIDER_PLANS = {
-  claude: ['free', 'pro', 'school'],
-  openai: ['pro', 'school'],
-  gemini: ['free', 'pro', 'school'],
+  claude:  ['free', 'pro', 'school'],
+  openai:  ['pro', 'school'],
+  gemini:  ['pro', 'school'],
   copilot: ['school'],
 };
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
+
+  // ── Autenticação ──────────────────────────────────────────────────────────
+  const session = await getServerSession(req, res, authOptions);
+  if (!session?.user?.email) {
+    return res.status(401).json({ error: 'auth_required', message: 'Faça login para continuar.' });
   }
 
-  const { prompt, provider = 'claude', plan = 'free', files = [] } = req.body;
+  const { prompt, provider = 'claude', files = [], meta = {} } = req.body;
+  if (!prompt) return res.status(400).json({ error: 'Prompt obrigatório' });
 
-  // Validação básica
-  if (!prompt) {
-    return res.status(400).json({ error: 'Prompt obrigatório' });
+  // ── Plano e limites (server-authoritative) ────────────────────────────────
+  let profile;
+  try {
+    profile = await getOrCreateProfile(session.user.email, session.user.name, session.user.image);
+  } catch (e) {
+    console.error('Erro ao buscar perfil:', e.message);
+    return res.status(500).json({ error: 'db_error', message: 'Erro ao verificar sua conta. Tente novamente.' });
   }
 
-  // Verificar se o plano pode usar o provedor escolhido
+  const { plan } = profile;
+
   if (!PROVIDER_PLANS[provider]?.includes(plan)) {
     return res.status(403).json({
       error: 'upgrade_required',
@@ -48,74 +65,43 @@ export default async function handler(req, res) {
     });
   }
 
-  // Verificar chave da API antes de chamar o provedor
-  const KEY_MAP = {
-    claude:  'ANTHROPIC_API_KEY',
-    openai:  'OPENAI_API_KEY',
-    gemini:  'GEMINI_API_KEY',
-    copilot: 'AZURE_OPENAI_KEY',
-  };
-  const requiredKey = KEY_MAP[provider];
-  if (requiredKey && !process.env[requiredKey]) {
-    return res.status(500).json({
-      error: 'api_error',
-      message: `Chave de API não configurada para ${provider}.`,
-      detail: `A variável ${requiredKey} não está definida no servidor. Adicione-a ao arquivo .env.local.`,
+  if (plan !== 'school' && profile.usage >= PLAN_LIMITS[plan]) {
+    return res.status(403).json({
+      error: 'limit_reached',
+      message: `Você atingiu o limite de ${PLAN_LIMITS[plan]} gerações este mês.`,
     });
   }
 
-  // Mock temporário — ativo quando NEXT_PUBLIC_MOCK_AI=true (sem créditos de API)
-  if (process.env.NEXT_PUBLIC_MOCK_AI === 'true') {
-    const mockResult = `**[MOCK] Resposta simulada do provedor: ${provider}**\n\n` +
-      `Este é um conteúdo de teste gerado localmente, sem consumir créditos de API.\n\n` +
-      `**Prompt recebido:**\n${prompt}\n\n` +
-      `**Arquivos anexados:** ${files.length > 0 ? files.map(f => f.name).join(', ') : 'nenhum'}\n\n` +
-      `Para usar a API real, remova ou defina \`NEXT_PUBLIC_MOCK_AI=false\` no arquivo \`.env.local\`.`;
-    return res.status(200).json({ result: mockResult, provider, model: `mock-${PROVIDER_MODELS[provider]}` });
-  }
-
+  // ── Geração ───────────────────────────────────────────────────────────────
   try {
     let result = '';
 
     if (provider === 'claude') {
       const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      const messages = buildAnthropicMessages(prompt, files);
-      const hasPdf = files.some(f => f.type === 'pdf');
-      const response = await client.messages.create(
-        {
-          model: PROVIDER_MODELS.claude,
-          max_tokens: 3500,
-          messages,
-        },
-        hasPdf ? { headers: { 'anthropic-beta': 'pdfs-2024-09-25' } } : {},
-      );
+      const response = await client.messages.create({
+        model: PROVIDER_MODELS.claude,
+        max_tokens: 8000,
+        system: SESI_SYSTEM_PROMPT,
+        messages: buildAnthropicMessages(prompt, files),
+      });
       result = response.content[0]?.text || '';
 
     } else if (provider === 'openai') {
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const messages = buildOpenAIMessages(prompt, files);
       const response = await client.chat.completions.create({
         model: PROVIDER_MODELS.openai,
-        max_tokens: 3500,
-        messages,
+        max_tokens: 8000,
+        messages: [{ role: 'system', content: SESI_SYSTEM_PROMPT }, ...buildOpenAIMessages(prompt, files)],
       });
       result = response.choices[0]?.message?.content || '';
 
     } else if (provider === 'gemini') {
       const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = client.getGenerativeModel({ model: PROVIDER_MODELS.gemini });
-      const parts = [];
-      files.forEach(f => {
-        if (f.type === 'img' && f.b64) {
-          parts.push({ inlineData: { mimeType: f.mediaType || 'image/jpeg', data: f.b64 } });
-        }
-      });
-      parts.push({ text: prompt });
-      const response = await model.generateContent({ contents: [{ role: 'user', parts }] });
+      const model = client.getGenerativeModel({ model: PROVIDER_MODELS.gemini, systemInstruction: SESI_SYSTEM_PROMPT });
+      const response = await model.generateContent({ contents: [{ role: 'user', parts: buildGeminiParts(prompt, files) }] });
       result = response.response.text();
 
     } else if (provider === 'copilot') {
-      // Microsoft Copilot usa Azure OpenAI
       const client = new OpenAI({
         apiKey: process.env.AZURE_OPENAI_KEY,
         baseURL: process.env.AZURE_OPENAI_ENDPOINT,
@@ -124,62 +110,71 @@ export default async function handler(req, res) {
       });
       const response = await client.chat.completions.create({
         model: PROVIDER_MODELS.copilot,
-        max_tokens: 3500,
-        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 8000,
+        messages: [{ role: 'system', content: SESI_SYSTEM_PROMPT }, { role: 'user', content: prompt }],
       });
       result = response.choices[0]?.message?.content || '';
     }
 
-    return res.status(200).json({ result, provider, model: PROVIDER_MODELS[provider] });
+    // ── Salvar no banco ───────────────────────────────────────────────────────
+    await incrementUsage(session.user.email);
+    await saveGeneration(session.user.email, {
+      tipo:       meta.tipo       || 'prova',
+      titulo:     meta.titulo     || null,
+      disciplina: meta.disciplina || null,
+      serie:      meta.serie      || null,
+      turma:      meta.turma      || null,
+      provider,
+      conteudo:   result,
+    });
+
+    return res.status(200).json({
+      result,
+      provider,
+      model:  PROVIDER_MODELS[provider],
+      usage:  profile.usage + 1,
+      plan,
+    });
 
   } catch (error) {
-    const detail = error?.message || error?.toString() || 'erro desconhecido';
-    console.error('Erro ao chamar provedor:', provider, detail);
+    console.error('Erro ao chamar provedor:', provider, error.message);
     return res.status(500).json({
-      error: 'api_error',
+      error:   'api_error',
       message: 'Erro ao gerar conteúdo. Tente novamente.',
-      detail,
+      detail:  process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 }
 
-// Monta mensagens para o Anthropic (suporta arquivos: PDF e imagens)
 function buildAnthropicMessages(prompt, files) {
-  const contentParts = [];
-
+  const parts = [];
   files.forEach(f => {
-    if (f.type === 'pdf' && f.b64) {
-      contentParts.push({ type: 'text', text: `Arquivo PDF: ${f.name}` });
-      contentParts.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.b64 } });
-    } else if (f.type === 'img' && f.b64) {
-      contentParts.push({ type: 'text', text: `Imagem: ${f.name}` });
-      contentParts.push({ type: 'image', source: { type: 'base64', media_type: f.mediaType || 'image/jpeg', data: f.b64 } });
-    } else if (f.text) {
-      contentParts.push({ type: 'text', text: `Conteúdo de ${f.name}:\n${f.text}` });
-    }
+    if (f.type === 'pdf' && f.b64)  { parts.push({ type: 'text', text: `Arquivo PDF: ${f.name}` }); parts.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.b64 } }); }
+    else if (f.type === 'img' && f.b64) { parts.push({ type: 'text', text: `Imagem: ${f.name}` }); parts.push({ type: 'image', source: { type: 'base64', media_type: f.mediaType || 'image/jpeg', data: f.b64 } }); }
+    else if (f.text) parts.push({ type: 'text', text: `Conteúdo de ${f.name}:\n${f.text}` });
   });
-
-  contentParts.push({ type: 'text', text: prompt });
-  return [{ role: 'user', content: contentParts }];
+  parts.push({ type: 'text', text: prompt });
+  return [{ role: 'user', content: parts }];
 }
 
-// Monta mensagens para OpenAI (suporta imagens via URL base64)
-function buildOpenAIMessages(prompt, files) {
-  const contentParts = [];
-
+function buildGeminiParts(prompt, files) {
+  const parts = [];
   files.forEach(f => {
-    if (f.type === 'img' && f.b64) {
-      contentParts.push({
-        type: 'image_url',
-        image_url: { url: `data:${f.mediaType || 'image/jpeg'};base64,${f.b64}` }
-      });
-    } else if (f.text) {
-      contentParts.push({ type: 'text', text: `Arquivo ${f.name}:\n${f.text}` });
-    }
+    if (f.type === 'img' && f.b64) parts.push({ inlineData: { mimeType: f.mediaType || 'image/jpeg', data: f.b64 } });
+    else if (f.text) parts.push({ text: `Arquivo ${f.name}:\n${f.text}` });
   });
+  parts.push({ text: prompt });
+  return parts;
+}
 
-  contentParts.push({ type: 'text', text: prompt });
-  return [{ role: 'user', content: contentParts }];
+function buildOpenAIMessages(prompt, files) {
+  const parts = [];
+  files.forEach(f => {
+    if (f.type === 'img' && f.b64) parts.push({ type: 'image_url', image_url: { url: `data:${f.mediaType || 'image/jpeg'};base64,${f.b64}` } });
+    else if (f.text) parts.push({ type: 'text', text: `Arquivo ${f.name}:\n${f.text}` });
+  });
+  parts.push({ type: 'text', text: prompt });
+  return [{ role: 'user', content: parts }];
 }
 
 export const config = { api: { bodyParser: { sizeLimit: '12mb' } } };

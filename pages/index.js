@@ -1,1073 +1,581 @@
-// pages/index.js
 import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
-import ExportButtons from '../components/ExportButtons';
-import CloudSaveButtons from '../components/CloudSaveButtons';
+import { useSession } from 'next-auth/react';
 
-const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
+import { PLAN_LIMITS, PROVIDER_LABELS, MESES, LOADING_MSGS } from '../lib/constants';
+import { stripMarkdown, extrairGabarito, getFileName } from '../lib/utils';
+import { buildDocHTML } from '../lib/docBuilder';
 
-const PROVIDER_ACCESS = {
-  claude:  ['free', 'pro', 'school'],
-  openai:  ['pro', 'school'],
-  gemini:  ['free', 'pro', 'school'],
-  copilot: ['school'],
-};
+import LoginGate       from '../components/LoginGate';
+import AppHeader       from '../components/AppHeader';
+import ProviderSelector from '../components/ProviderSelector';
+import TabSelector     from '../components/TabSelector';
+import DocumentFields  from '../components/DocumentFields';
+import ContentSection  from '../components/ContentSection';
+import ModeloUpload    from '../components/ModeloUpload';
+import FileUploader    from '../components/FileUploader';
+import ResultPanel     from '../components/ResultPanel';
+import SetupModal      from '../components/modals/SetupModal';
+import ConfigModal     from '../components/modals/ConfigModal';
+import UpgradeModal    from '../components/modals/UpgradeModal';
+import TurmaModal      from '../components/modals/TurmaModal';
+import HistoryPanel    from '../components/HistoryPanel';
+import Toast           from '../components/Toast';
 
-const PROVIDER_LABELS = {
-  claude:  { name: 'Claude',  sub: 'Anthropic',     color: '#0C447C', bg: '#E6F1FB' },
-  openai:  { name: 'ChatGPT', sub: 'OpenAI GPT-4o', color: '#3B6D11', bg: '#EAF3DE' },
-  gemini:  { name: 'Gemini',  sub: 'Google',        color: '#633806', bg: '#FAEEDA' },
-  copilot: { name: 'Copilot', sub: 'Microsoft',     color: '#3C3489', bg: '#EEEDFE' },
-};
-
-const PLAN_LABELS = {
-  free:   { name: 'Gratuito', color: '#6B5B8A', limit: '10/mês',    bg: '#EDE6F7' },
-  pro:    { name: 'Pro',      color: '#3D348B', limit: '150/mês',   bg: '#D9D0EE' },
-  school: { name: 'Escola',   color: '#fff',    limit: 'Ilimitado', bg: '#FF7F50' },
-};
-
-// Quais provedores aceitam quais tipos de arquivo
-const PROVIDER_FILE_SUPPORT = {
-  claude:  { pdf: true,  image: true  },
-  openai:  { pdf: false, image: true  },
-  gemini:  { pdf: false, image: true  },
-  copilot: { pdf: false, image: false },
-};
-
-const FILE_WARN = 2 * 1024 * 1024; // 2 MB — mostra botão otimizar
-const FILE_MAX  = 5 * 1024 * 1024; // 5 MB — rejeita
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '693379917328-kmc6ahda2tj4hoemfm2j09bo7m7cs6ou.apps.googleusercontent.com';
 
 export default function Home() {
-  const [tab, setTab] = useState('plano');
-  const [plan, setPlan] = useState('free');
-  const [provider, setProvider] = useState('gemini');
-  const [usage, setUsage] = useState(0);
-  const [showUpgrade, setShowUpgrade] = useState(false);
+  const { data: session, status } = useSession();
+
+  const [tab, setTab]       = useState('prova');
+  const [plan, setPlan]     = useState('free');
+  const [provider, setProvider] = useState('claude');
+  const [usage, setUsage]   = useState(0);
+
+  const [showUpgrade, setShowUpgrade]               = useState(false);
   const [showProviderUpgrade, setShowProviderUpgrade] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState('');
-  const [resultTitle, setResultTitle] = useState('');
-  const [resultModel, setResultModel] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [showSetup, setShowSetup]                   = useState(false);
+  const [showConfig, setShowConfig]                 = useState(false);
+  const [showTurma, setShowTurma]                   = useState(false);
 
-  const [plano, setPlano] = useState({ disciplina: '', serie: '', duracao: '50 min', metodos: [], conteudo: '' });
-  const [prova, setProva] = useState({ disciplina: '', serie: '', dificuldade: 'Intermediário', qtd: '10 questões', tipos: ['Múltipla escolha'], instrucoes: '', conteudo: '' });
-  const [atividade, setAtividade] = useState({ disciplina: '', serie: '', tipo: ['Exercícios de fixação'], conteudo: '' });
+  const [loading, setLoading]           = useState(false);
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
+  const [errorMsg, setErrorMsg]         = useState('');
+  const [result, setResult]             = useState('');
+  const [resultTitle, setResultTitle]   = useState('');
+  const [copied, setCopied]             = useState(false);
+  const [historico, setHistorico]       = useState([]);
 
-  // Arquivos por aba
-  const [tabFiles, setTabFiles] = useState({ plano: [], prova: [], atividade: [] });
-  // Toolkit modal: qual arquivo está sendo otimizado
-  const [toolkit, setToolkit] = useState(null); // { fileId, tab }
+  const [files, setFiles]               = useState([]);
+  const [pageRanges, setPageRanges]     = useState({});
+  const [modelo, setModelo]             = useState(null);
+  const [modeloLoading, setModeloLoading] = useState(false);
 
+  const [gdLoading, setGdLoading] = useState(false);
+  const [gdStatus, setGdStatus]   = useState('');
+  const [odLoading, setOdLoading] = useState(false);
+  const [odStatus, setOdStatus]   = useState('');
+  const [setupStep, setSetupStep] = useState(0);
+  const [toast, setToast]         = useState(null);
+
+  const handleGenerateRef = useRef(null);
+
+  const [cfg, setCfg] = useState({ nomeProfessora: '', cidade: 'BOTUCATU', docCode: 'CE-228', tipoDoc: 'Prova Objetiva' });
+
+  const [plano, setPlano]       = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', duracao: '50 min', metodos: [], conteudo: '' });
+  const [prova, setProva]       = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', dificuldade: 'Intermediário', qtd: '10 questões', tipos: ['Múltipla escolha'], instrucoes: '', conteudo: '', criterios: '', valorInstrumento: '10,0' });
+  const [atividade, setAtividade] = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', tipo: ['Exercícios de fixação'], conteudo: '' });
+
+  const [gabaritos, setGabaritos]       = useState([]);
+  const [gabSelecionado, setGabSelecionado] = useState(null);
+  const [turmaAlunos, setTurmaAlunos]   = useState([]);
+  const [turmaAlunoNome, setTurmaAlunoNome] = useState('');
+  const [turmaFoto, setTurmaFoto]       = useState(null);
+  const [turmaCorrigindo, setTurmaCorrigindo] = useState(false);
+
+  // Persist state (cfg e gabaritos continuam em localStorage; uso e histórico vêm do servidor)
   useEffect(() => {
-    const saved     = localStorage.getItem('pp_usage');
-    const savedPlan = localStorage.getItem('pp_plan') || 'free';
-    if (saved) setUsage(parseInt(saved) || 0);
-    setPlan(savedPlan);
+    const saved = localStorage.getItem('sesi_cfg');
+    if (saved) { try { setCfg(JSON.parse(saved)); } catch (e) {} }
+    else setShowSetup(true);
+    const gabs = localStorage.getItem('sesi_gabaritos');
+    if (gabs) { try { setGabaritos(JSON.parse(gabs)); } catch (e) {} }
   }, []);
 
-  const toggleChip = (arr, setArr, val) => {
-    setArr(prev => {
-      const next = { ...prev };
-      next[arr]  = prev[arr].includes(val)
-        ? prev[arr].filter(x => x !== val)
-        : [...prev[arr], val];
-      return next;
-    });
+  useEffect(() => {
+    const handler = e => { if (result) { e.preventDefault(); e.returnValue = ''; return ''; } };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [result]);
+
+  useEffect(() => {
+    if (!loading) { setLoadingMsgIdx(0); return; }
+    const id = setInterval(() => setLoadingMsgIdx(i => (i + 1) % LOADING_MSGS.length), 3500);
+    return () => clearInterval(id);
+  }, [loading]);
+
+  const saveCfg = c => { setCfg(c); localStorage.setItem('sesi_cfg', JSON.stringify(c)); };
+  const limitReached = plan !== 'school' && usage >= PLAN_LIMITS[plan];
+
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch('/api/profile');
+      if (res.ok) { const d = await res.json(); if (d.plan) setPlan(d.plan); if (d.usage !== undefined) setUsage(d.usage); }
+    } catch {}
   };
 
-  const canUseProvider = (p) => PROVIDER_ACCESS[p]?.includes(plan);
-  const limitReached   = plan !== 'school' && usage >= PLAN_LIMITS[plan];
-
-  const handleProviderChange = (p) => {
-    if (!canUseProvider(p)) { setShowProviderUpgrade(true); return; }
-    setProvider(p);
-    setShowProviderUpgrade(false);
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch('/api/history');
+      if (res.ok) { const d = await res.json(); if (d.items) setHistorico(d.items); }
+    } catch {}
   };
 
-  // ── Gerenciamento de arquivos ───────────────────────────────────────────
+  useEffect(() => {
+    if (status === 'authenticated') { fetchProfile(); fetchHistory(); }
+  }, [status]);
 
-  const getFiles = () => tabFiles[tab];
+  useEffect(() => {
+    const handler = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleGenerateRef.current?.();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
-  const setFiles = (updater) => {
-    setTabFiles(prev => ({
-      ...prev,
-      [tab]: typeof updater === 'function' ? updater(prev[tab]) : updater,
+  const getDadosProva = () => ({
+    disc:             tab === 'plano' ? plano.disciplina : tab === 'prova' ? prova.disciplina : atividade.disciplina,
+    turma:            tab === 'plano' ? plano.turma      : tab === 'prova' ? prova.turma      : atividade.turma,
+    etapa:            tab === 'plano' ? plano.etapa      : tab === 'prova' ? prova.etapa      : atividade.etapa,
+    serie:            tab === 'plano' ? plano.serie      : tab === 'prova' ? prova.serie      : atividade.serie,
+    criterios:        tab === 'prova' ? prova.criterios  : '',
+    valorInstrumento: tab === 'prova' ? prova.valorInstrumento : '10,0',
+  });
+
+  // ── File handling ──────────────────────────────────────────────────────────
+  const updateFile = (idx, patch) => setFiles(prev => prev.map((f, i) => i === idx ? { ...f, ...patch } : f));
+
+  const processFile = async (file, idx) => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const type = ext === 'pdf' ? 'pdf' : ['doc', 'docx'].includes(ext) ? 'word' : ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? 'img' : 'txt';
+    updateFile(idx, { status: 'reading' });
+    try {
+      if (type === 'pdf') {
+        if (!window.pdfjsLib) await new Promise(r => setTimeout(r, 1500));
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const buf = await file.arrayBuffer();
+        const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+        updateFile(idx, { status: 'range', totalPages: pdf.numPages, rawFile: file });
+        setPageRanges(prev => ({ ...prev, [idx]: { from: 1, to: Math.min(pdf.numPages, 50) } }));
+      } else if (type === 'word') {
+        if (!window.mammoth) await new Promise(r => setTimeout(r, 1500));
+        const buf = await file.arrayBuffer();
+        const r = await window.mammoth.extractRawText({ arrayBuffer: buf });
+        updateFile(idx, { status: 'ok', text: r.value });
+      } else if (type === 'img') {
+        const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result.split(',')[1]); r.readAsDataURL(file); });
+        updateFile(idx, { status: 'ok', imgB64: b64, imgType: file.type });
+      } else {
+        const text = await file.text();
+        updateFile(idx, { status: 'ok', text });
+      }
+    } catch (e) { updateFile(idx, { status: 'err', err: e.message }); }
+  };
+
+  const extractPages = async idx => {
+    const f = files[idx];
+    const range = pageRanges[idx] || {};
+    updateFile(idx, { status: 'extracting' });
+    try {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const buf = await f.rawFile.arrayBuffer();
+      const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+      const from = Math.max(1, range.from || 1);
+      const to   = Math.min(pdf.numPages, range.to || pdf.numPages);
+      let text = '';
+      for (let p = from; p <= to; p++) {
+        const pg = await pdf.getPage(p);
+        const c = await pg.getTextContent();
+        text += c.items.map(i => i.str).join(' ') + '\n';
+      }
+      updateFile(idx, { status: 'ok', text, note: `Páginas ${from}–${to} de ${pdf.numPages}` });
+    } catch (e) { updateFile(idx, { status: 'err', err: e.message }); }
+  };
+
+  const addFiles = fileList => {
+    const nf = [...fileList].map(file => ({
+      name: file.name, size: file.size,
+      type: (() => { const e = file.name.split('.').pop().toLowerCase(); return e === 'pdf' ? 'pdf' : ['doc', 'docx'].includes(e) ? 'word' : ['jpg', 'jpeg', 'png', 'webp'].includes(e) ? 'img' : 'txt'; })(),
+      status: 'reading', rawFile: file,
     }));
-  };
-
-  const handleFileAdd = async (rawFiles) => {
-    const support = PROVIDER_FILE_SUPPORT[provider];
-    for (const file of Array.from(rawFiles)) {
-      const isPdf   = file.type === 'application/pdf';
-      const isImage = file.type.startsWith('image/');
-      if (!isPdf && !isImage) continue;
-
-      if (isPdf && !support.pdf) {
-        alert(`${PROVIDER_LABELS[provider].name} não suporta PDF.\nTroque para Claude para enviar PDFs.`);
-        continue;
-      }
-      if (isImage && !support.image) {
-        alert(`${PROVIDER_LABELS[provider].name} não suporta imagens.`);
-        continue;
-      }
-      if (file.size > FILE_MAX) {
-        alert(`"${file.name}" excede 5 MB.\nUse a ferramenta de redução ou escolha um arquivo menor.`);
-        continue;
-      }
-
-      const b64 = await toBase64(file);
-      const fileObj = {
-        id:            `${Date.now()}-${Math.random()}`,
-        name:          file.name,
-        size:          file.size,
-        type:          isPdf ? 'pdf' : 'img',
-        mediaType:     file.type,
-        b64,
-        preview:       isImage ? URL.createObjectURL(file) : null,
-        pageCount:     null,
-        needsOptimize: file.size > FILE_WARN,
-      };
-
-      if (isPdf) {
-        try {
-          const { PDFDocument } = await import('pdf-lib');
-          const bytes       = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-          const doc         = await PDFDocument.load(bytes);
-          fileObj.pageCount = doc.getPageCount();
-        } catch (e) {
-          console.warn('PDF parse:', e);
-        }
-      }
-
-      setFiles(prev => [...prev, fileObj]);
-    }
-  };
-
-  const handleFileRemove = (id) => {
     setFiles(prev => {
-      const f = prev.find(x => x.id === id);
-      if (f?.preview) URL.revokeObjectURL(f.preview);
-      return prev.filter(x => x.id !== id);
+      const si = prev.length;
+      nf.forEach((_, i) => setTimeout(() => processFile(fileList[i], si + i), 0));
+      return [...prev, ...nf];
     });
   };
 
-  const handleFileUpdate = (fileTab, id, updates) => {
-    setTabFiles(prev => ({
-      ...prev,
-      [fileTab]: prev[fileTab].map(f => f.id === id ? { ...f, ...updates } : f),
-    }));
+  const removeFile = idx => {
+    setFiles(prev => prev.filter((_, i) => i !== idx));
+    setPageRanges(prev => { const n = { ...prev }; delete n[idx]; return n; });
   };
 
-  // ── Prompts ─────────────────────────────────────────────────────────────
+  const loadModelo = async file => {
+    setModeloLoading(true);
+    const ext = file.name.split('.').pop().toLowerCase();
+    const type = ext === 'pdf' ? 'pdf' : ['doc', 'docx'].includes(ext) ? 'word' : ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? 'img' : 'txt';
+    try {
+      if (type === 'pdf') {
+        if (!window.pdfjsLib) await new Promise(r => setTimeout(r, 1500));
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const buf = await file.arrayBuffer();
+        const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+        let text = '';
+        for (let p = 1; p <= pdf.numPages; p++) { const pg = await pdf.getPage(p); const c = await pg.getTextContent(); text += c.items.map(i => i.str).join(' ') + '\n'; }
+        setModelo({ name: file.name, text, type: 'pdf' });
+      } else if (type === 'word') {
+        if (!window.mammoth) await new Promise(r => setTimeout(r, 1500));
+        const buf = await file.arrayBuffer();
+        const r = await window.mammoth.extractRawText({ arrayBuffer: buf });
+        setModelo({ name: file.name, text: r.value, type: 'word' });
+      } else if (type === 'img') {
+        const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result.split(',')[1]); r.readAsDataURL(file); });
+        setModelo({ name: file.name, imgB64: b64, imgType: file.type, type: 'img' });
+      } else {
+        const text = await file.text();
+        setModelo({ name: file.name, text, type: 'txt' });
+      }
+    } catch (e) { alert('Erro ao ler modelo: ' + e.message); }
+    setModeloLoading(false);
+  };
 
+  // ── Prompt builder ─────────────────────────────────────────────────────────
   const buildPrompt = () => {
+    let ctx = '';
+    files.filter(f => f.status === 'ok' && f.text).forEach(f => { ctx += `\n\n--- Conteúdo de "${f.name}"${f.note ? ' (' + f.note + ')' : ''} ---\n${f.text.slice(0, 80000)}`; });
+    const modeloCtx = modelo?.text ? `\n\nMODELO DE REFERÊNCIA:\n"""\n${modelo.text.slice(0, 8000)}\n"""\n` : modelo?.imgB64 ? '[Imagem do modelo]' : '';
+    const fmtQ = `\n\nFORMATO OBRIGATÓRIO — gere APENAS o corpo da prova, sem introdução:\n\nQUESTÃO 01 (X PONTOS)\nENUNCIADO EM MAIÚSCULAS\nA) (    ) OPÇÃO\nB) (    ) OPÇÃO\nC) (    ) OPÇÃO\nD) (    ) OPÇÃO\n\n[demais questões...]\n\nGABARITO:\n01 - A\n02 - B\n[etc]\n\nIMPORTANTE: Use maiúsculas. Inclua GABARITO ao final.`;
     if (tab === 'plano') {
       const { disciplina, serie, duracao, metodos, conteudo } = plano;
-      return `Você é especialista em educação da rede SESI. Crie um plano de aula completo baseado no material abaixo.
-
-Dados: Disciplina: ${disciplina||'não especificada'} | Série: ${serie||'não especificada'} | Duração: ${duracao}${metodos.length ? ' | Metodologias: '+metodos.join(', ') : ''}
-
-Material de referência:
-${conteudo}
-
-Estrutura obrigatória:
-1. IDENTIFICAÇÃO
-2. OBJETIVOS DE APRENDIZAGEM (BNCC)
-3. COMPETÊNCIAS SOCIOEMOCIONAIS
-4. CONTEÚDOS (conceituais, procedimentais, atitudinais)
-5. SEQUÊNCIA DIDÁTICA com tempos estimados (Inicial, Desenvolvimento, Consolidação, Fechamento)
-6. RECURSOS DIDÁTICOS
-7. AVALIAÇÃO
-8. REFERÊNCIAS
-
-Seja detalhado, prático, inclua perguntas para fazer à turma e dicas metodológicas.`;
+      return `Você é especialista em educação da rede SESI. Crie um plano de aula completo.${modeloCtx}\nDisciplina: ${disciplina || '?'} | Série: ${serie || '?'} | Duração: ${duracao}${metodos.length ? ' | Metodologias: ' + metodos.join(', ') : ''}\nMaterial:\n${conteudo}${ctx}\nEstrutura: 1.IDENTIFICAÇÃO 2.OBJETIVOS(BNCC) 3.COMPETÊNCIAS SOCIOEMOCIONAIS 4.CONTEÚDOS 5.SEQUÊNCIA DIDÁTICA 6.RECURSOS 7.AVALIAÇÃO 8.REFERÊNCIAS`;
     }
-
     if (tab === 'prova') {
       const { disciplina, serie, dificuldade, qtd, tipos, instrucoes, conteudo } = prova;
-      return `Você é especialista em avaliação educacional da rede SESI. Crie uma prova completa e pronta para uso.
-
-Dados: Disciplina: ${disciplina||'não especificada'} | Série: ${serie||'não especificada'} | Dificuldade: ${dificuldade} | ${qtd}${tipos.length ? ' | Tipos: '+tipos.join(', ') : ''}${instrucoes ? ' | Instruções: '+instrucoes : ''}
-
-Conteúdo avaliado:
-${conteudo}
-
-Estrutura: CABEÇALHO (nome/turma/data/nota) > INSTRUÇÕES GERAIS > QUESTÕES numeradas > GABARITO COMENTADO.
-Para múltipla escolha: 4 alternativas A-B-C-D. Para dissertativas: indicar valor e critérios.
-Contextualize com situações reais e universo industrial/SESI.`;
+      return `Você é especialista em avaliação educacional da rede SESI. Crie uma prova.${modeloCtx}\nDisciplina: ${disciplina || '?'} | Série: ${serie || '?'} | Dificuldade: ${dificuldade} | ${qtd}${tipos.length ? ' | Tipos: ' + tipos.join(', ') : ''}${instrucoes ? ' | Obs: ' + instrucoes : ''}\nConteúdo:\n${conteudo}${ctx}${fmtQ}`;
     }
-
     const { disciplina, serie, tipo, conteudo } = atividade;
-    return `Você é especialista em educação da rede SESI. Crie uma atividade pedagógica completa e pronta para aplicação.
-
-Dados: Disciplina: ${disciplina||'não especificada'} | Série: ${serie||'não especificada'}${tipo.length ? ' | Tipo: '+tipo.join(', ') : ''}
-
-Conteúdo e objetivos:
-${conteudo}
-
-Estrutura:
-1. TÍTULO criativo
-2. OBJETIVO(S)
-3. MATERIAIS NECESSÁRIOS
-4. TEMPO ESTIMADO
-5. INSTRUÇÕES PARA O PROFESSOR (passo a passo)
-6. ATIVIDADE PARA O ALUNO (pronto para imprimir)
-7. CRITÉRIOS DE AVALIAÇÃO`;
+    return `Você é especialista em educação da rede SESI. Crie uma atividade pedagógica.${modeloCtx}\nDisciplina: ${disciplina || '?'} | Série: ${serie || '?'}${tipo.length ? ' | Tipo: ' + tipo.join(', ') : ''}\n${conteudo}${ctx}\nEstrutura: 1.TÍTULO 2.OBJETIVO 3.MATERIAIS 4.TEMPO 5.INSTRUÇÕES 6.ATIVIDADE 7.CRITÉRIOS`;
   };
 
-  const getConteudo = () => {
-    if (tab === 'plano') return plano.conteudo;
-    if (tab === 'prova') return prova.conteudo;
-    return atividade.conteudo;
-  };
-
+  // ── Generate ───────────────────────────────────────────────────────────────
   const handleGenerate = async () => {
     if (limitReached) { setShowUpgrade(true); return; }
-    if (!canUseProvider(provider)) { setShowProviderUpgrade(true); return; }
-    const conteudo = getConteudo();
-    if (!conteudo.trim()) { alert('Adicione o conteúdo ou material de referência, Profe — a gente cuida do resto!'); return; }
-
-    setLoading(true);
-    setResult('');
-    const tabLabels = { plano: 'Plano de Aula', prova: 'Avaliação', atividade: 'Atividade' };
-    const disc = tab === 'plano' ? plano.disciplina : tab === 'prova' ? prova.disciplina : atividade.disciplina;
-    setResultTitle(`${tabLabels[tab]}${disc ? ' — ' + disc : ''} · ${PROVIDER_LABELS[provider].name}`);
-
-    const files = getFiles().map(({ name, type, b64, mediaType, text }) => ({ name, type, b64, mediaType, text }));
-
+    const conteudo = tab === 'plano' ? plano.conteudo : tab === 'prova' ? prova.conteudo : atividade.conteudo;
+    const hasFile  = files.some(f => f.status === 'ok' && (f.text || f.imgB64));
+    if (!conteudo.trim() && !hasFile) { setErrorMsg('Adicione conteúdo ou envie um arquivo antes de gerar.'); return; }
+    if (files.some(f => f.status === 'range')) { setErrorMsg('Extraia as páginas dos PDFs antes de gerar.'); return; }
+    setLoading(true); setResult(''); setErrorMsg('');
+    const dp = getDadosProva();
+    const titulo = `${tab === 'plano' ? 'Plano de Aula' : tab === 'prova' ? 'Prova' : 'Atividade'}${dp.disc ? ' — ' + dp.disc : ''} · ${PROVIDER_LABELS[provider].name}`;
+    setResultTitle(titulo);
+    const apiFiles = files.filter(f => f.status === 'ok').map(f => {
+      if (f.imgB64) return { type: 'img', b64: f.imgB64, mediaType: f.imgType, name: f.name };
+      if (f.text)   return { type: 'txt', text: f.text, name: f.name };
+      return null;
+    }).filter(Boolean);
+    if (modelo?.imgB64) apiFiles.unshift({ type: 'img', b64: modelo.imgB64, mediaType: modelo.imgType, name: 'modelo_' + modelo.name });
     try {
-      const res = await fetch('/api/generate', {
-        method:  'POST',
+      const res  = await fetch('/api/generate', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ prompt: buildPrompt(), provider, plan, files }),
+        body: JSON.stringify({
+          prompt: buildPrompt(), provider, files: apiFiles,
+          meta: { tipo: tab, titulo, disciplina: dp.disc, serie: dp.serie, turma: dp.turma },
+        }),
       });
       const data = await res.json();
-      if (data.error === 'upgrade_required') { setShowUpgrade(true); setLoading(false); return; }
-      if (!res.ok) throw new Error(data.detail || data.message || 'Erro desconhecido');
-      setResult(data.result);
-      setResultModel(data.model || '');
-
-      const newUsage = usage + 1;
-      setUsage(newUsage);
-      localStorage.setItem('pp_usage', newUsage.toString());
+      if (data.error === 'auth_required')  { setErrorMsg('Sessão expirada. Recarregue a página e faça login.'); setLoading(false); return; }
+      if (data.error === 'upgrade_required' || data.error === 'limit_reached') { setShowUpgrade(true); setLoading(false); return; }
+      if (!res.ok) throw new Error(data.message || 'Erro na geração');
+      const gerado = stripMarkdown(data.result);
+      setResult(gerado);
+      if (data.usage !== undefined) setUsage(data.usage);
+      if (data.plan)  setPlan(data.plan);
+      setToast({ msg: 'Material gerado com sucesso!', type: 'success' });
+      fetchHistory();
+      if (tab === 'prova') {
+        const respostas = extrairGabarito(data.result);
+        if (Object.keys(respostas).length > 0) {
+          const tituloGab = `Prova ${dp.disc} — ${dp.turma || dp.serie} (${new Date().toLocaleDateString('pt-BR')})`;
+          salvarGabarito(tituloGab, respostas, dp);
+        }
+      }
     } catch (e) {
-      setResult('Erro ao gerar: ' + e.message);
+      const msg = e.message || 'Erro desconhecido';
+      if (msg.includes('fetch') || msg.includes('network')) setErrorMsg('Sem conexão. Verifique sua internet e tente novamente.');
+      else if (msg.includes('timeout') || msg.includes('504')) setErrorMsg('A IA demorou muito. Tente reduzir o conteúdo ou escolha outra IA.');
+      else setErrorMsg('Erro ao gerar: ' + msg + '. Tente novamente ou mude de IA.');
     }
     setLoading(false);
   };
 
-  const copyResult = () => {
-    navigator.clipboard.writeText(result);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+  // ── Gabarito ───────────────────────────────────────────────────────────────
+  const salvarGabarito = (titulo, respostas, dadosProva) => {
+    const novoGab = { id: Date.now().toString(), titulo, disciplina: dadosProva.disc || '', turma: dadosProva.turma || '', serie: dadosProva.serie || '', etapa: dadosProva.etapa || '', data: new Date().toLocaleDateString('pt-BR'), respostas, valorInstrumento: dadosProva.valorInstrumento || '10,0', qtd: Object.keys(respostas).length };
+    const lista = [novoGab, ...gabaritos].slice(0, 20);
+    setGabaritos(lista);
+    localStorage.setItem('sesi_gabaritos', JSON.stringify(lista));
+    return novoGab;
   };
 
-  const usagePct   = plan === 'school' ? 5 : Math.min(100, (usage / PLAN_LIMITS[plan]) * 100);
-  const usageColor = usagePct > 80 ? '#A32D2D' : usagePct > 50 ? '#BA7517' : '#3B6D11';
+  const downloadGabarito = gab => {
+    const linhas = [`GABARITO — ${gab.titulo}`, `Disciplina: ${gab.disciplina} | Turma: ${gab.turma} | Data: ${gab.data}`, '', ...Object.entries(gab.respostas).map(([q, r]) => `Questão ${q}: ${r}`)];
+    const blob = new Blob([linhas.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `Gabarito_${gab.disciplina}_${gab.data.replace(/\//g, '-')}.txt`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  };
 
-  const toolkitFile = toolkit
-    ? tabFiles[toolkit.tab]?.find(f => f.id === toolkit.fileId) ?? null
-    : null;
-
-  return (
-    <>
-      <Head>
-        <title>ProntoProfe — Sua aula pronta, seu tempo de volta.</title>
-        <meta name="description" content="Sua aula pronta, seu tempo de volta. Gerador de planos, provas e atividades com IA para professores." />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-
-      <div style={s.page}>
-        {/* Header */}
-        <div style={s.header}>
-          <div style={s.headerInner}>
-            <div style={s.logo}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M14 3H5a1 1 0 00-1 1v16a1 1 0 001 1h14a1 1 0 001-1V9l-6-6z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M14 3v6h6" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M8 14l2.5 2.5L16 10" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <div>
-              <div style={s.appName}>ProntoProfe</div>
-              <div style={s.appSub}>Sua aula pronta, seu tempo de volta.</div>
-            </div>
-            <div style={{ flex: 1 }} />
-            <div style={s.usageBar}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ ...s.planBadge, background: PLAN_LABELS[plan].bg, color: PLAN_LABELS[plan].color }}>
-                  {PLAN_LABELS[plan].name}
-                </span>
-                <span style={s.usageText}>
-                  {plan === 'school' ? 'Ilimitado' : `${usage} / ${PLAN_LIMITS[plan]} gerações`}
-                </span>
-              </div>
-              {plan !== 'school' && (
-                <div style={s.progressTrack}>
-                  <div style={{ ...s.progressFill, width: usagePct + '%', background: usageColor }} />
-                </div>
-              )}
-            </div>
-            {plan !== 'school' && (
-              <button style={s.btnUpgrade} onClick={() => setShowUpgrade(true)}>
-                Fazer upgrade
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div style={s.main}>
-          {/* Seletor de IA */}
-          <div style={s.aiSelector}>
-            <div style={s.aiSelectorLabel}>IA escolhida:</div>
-            <div style={s.aiButtons}>
-              {Object.entries(PROVIDER_LABELS).map(([key, info]) => {
-                const available = canUseProvider(key);
-                const active    = provider === key;
-                return (
-                  <button
-                    key={key}
-                    style={{
-                      ...s.aiBtn,
-                      ...(active    ? { background: info.bg, color: info.color, borderColor: info.color } : {}),
-                      ...(available ? {} : { opacity: 0.45 }),
-                    }}
-                    onClick={() => handleProviderChange(key)}
-                    title={available ? info.sub : 'Disponível no plano Pro ou superior'}
-                  >
-                    {info.name}
-                    {!available && <span style={s.lockIcon}>🔒</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div style={s.tabs}>
-            {[['plano', 'Plano de Aula'], ['prova', 'Prova / Avaliação'], ['atividade', 'Atividade']].map(([key, label]) => (
-              <button key={key} style={{ ...s.tab, ...(tab === key ? s.tabActive : {}) }} onClick={() => setTab(key)}>
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Formulário — Plano de Aula */}
-          {tab === 'plano' && (
-            <FormCard>
-              <Row3>
-                <Field label="Disciplina">
-                  <Select value={plano.disciplina} onChange={v => setPlano(p => ({ ...p, disciplina: v }))} options={DISCIPLINAS} />
-                </Field>
-                <Field label="Série / Turma">
-                  <Select value={plano.serie} onChange={v => setPlano(p => ({ ...p, serie: v }))} options={SERIES} />
-                </Field>
-                <Field label="Duração">
-                  <Select value={plano.duracao} onChange={v => setPlano(p => ({ ...p, duracao: v }))} options={['50 min', '1h (2 tempos)', '1h30 (3 tempos)', '2h (4 tempos)']} />
-                </Field>
-              </Row3>
-              <Field label="Metodologias ativas (opcional)" style={{ marginBottom: 12 }}>
-                <ChipGroup
-                  options={['Aula expositiva', 'Trabalho em grupo', 'Resolução de problemas', 'Gamificação', 'Sala invertida', 'Laboratório', 'Debate', 'Projeto integrador']}
-                  selected={plano.metodos}
-                  onToggle={v => setPlano(p => ({ ...p, metodos: p.metodos.includes(v) ? p.metodos.filter(x => x !== v) : [...p.metodos, v] }))}
-                />
-              </Field>
-              <Field label="Conteúdo / material de referência" style={{ marginBottom: 12 }}>
-                <Textarea value={plano.conteudo} onChange={v => setPlano(p => ({ ...p, conteudo: v }))}
-                  placeholder="Descreva o tema, cole trechos do livro, resuma o conteúdo... Quanto mais detalhe, mais preciso o resultado." />
-              </Field>
-              <FileUploadZone
-                files={tabFiles.plano}
-                provider={provider}
-                onAdd={handleFileAdd}
-                onRemove={handleFileRemove}
-                onOptimize={f => setToolkit({ fileId: f.id, tab: 'plano' })}
-              />
-            </FormCard>
-          )}
-
-          {/* Formulário — Prova */}
-          {tab === 'prova' && (
-            <FormCard>
-              <Row3>
-                <Field label="Disciplina">
-                  <Select value={prova.disciplina} onChange={v => setProva(p => ({ ...p, disciplina: v }))} options={DISCIPLINAS} />
-                </Field>
-                <Field label="Série / Turma">
-                  <Select value={prova.serie} onChange={v => setProva(p => ({ ...p, serie: v }))} options={SERIES_AGRUPADAS} />
-                </Field>
-                <Field label="Dificuldade">
-                  <Select value={prova.dificuldade} onChange={v => setProva(p => ({ ...p, dificuldade: v }))} options={['Básico', 'Intermediário', 'Avançado', 'Misto']} />
-                </Field>
-              </Row3>
-              <Row2 style={{ marginBottom: 12 }}>
-                <Field label="Tipos de questões">
-                  <ChipGroup
-                    options={['Múltipla escolha', 'Verdadeiro/Falso', 'Dissertativa', 'Lacunas', 'Colunas']}
-                    selected={prova.tipos}
-                    onToggle={v => setProva(p => ({ ...p, tipos: p.tipos.includes(v) ? p.tipos.filter(x => x !== v) : [...p.tipos, v] }))}
-                  />
-                </Field>
-                <Field label="Quantidade">
-                  <Select value={prova.qtd} onChange={v => setProva(p => ({ ...p, qtd: v }))} options={['5 questões', '10 questões', '15 questões', '20 questões']} />
-                </Field>
-              </Row2>
-              <Field label="Instruções especiais (opcional)" style={{ marginBottom: 12 }}>
-                <input style={s.input} value={prova.instrucoes} onChange={e => setProva(p => ({ ...p, instrucoes: e.target.value }))}
-                  placeholder="Ex: incluir gabarito, sem calculadora, contextualizar com indústria..." />
-              </Field>
-              <Field label="Conteúdo avaliado" style={{ marginBottom: 12 }}>
-                <Textarea value={prova.conteudo} onChange={v => setProva(p => ({ ...p, conteudo: v }))}
-                  placeholder="Descreva os tópicos avaliados, cole resumos ou trechos do material..." />
-              </Field>
-              <FileUploadZone
-                files={tabFiles.prova}
-                provider={provider}
-                onAdd={handleFileAdd}
-                onRemove={handleFileRemove}
-                onOptimize={f => setToolkit({ fileId: f.id, tab: 'prova' })}
-              />
-            </FormCard>
-          )}
-
-          {/* Formulário — Atividade */}
-          {tab === 'atividade' && (
-            <FormCard>
-              <Row2 style={{ marginBottom: 12 }}>
-                <Field label="Disciplina">
-                  <Select value={atividade.disciplina} onChange={v => setAtividade(p => ({ ...p, disciplina: v }))} options={DISCIPLINAS} />
-                </Field>
-                <Field label="Série / Turma">
-                  <Select value={atividade.serie} onChange={v => setAtividade(p => ({ ...p, serie: v }))} options={SERIES_AGRUPADAS} />
-                </Field>
-              </Row2>
-              <Field label="Tipo de atividade" style={{ marginBottom: 12 }}>
-                <ChipGroup
-                  options={['Exercícios de fixação', 'Atividade lúdica', 'Pesquisa e reflexão', 'Produção textual', 'Estudo de caso', 'Caça-palavras']}
-                  selected={atividade.tipo}
-                  onToggle={v => setAtividade(p => ({ ...p, tipo: p.tipo.includes(v) ? p.tipo.filter(x => x !== v) : [...p.tipo, v] }))}
-                />
-              </Field>
-              <Field label="Conteúdo e objetivos" style={{ marginBottom: 12 }}>
-                <Textarea value={atividade.conteudo} onChange={v => setAtividade(p => ({ ...p, conteudo: v }))}
-                  placeholder="Descreva o conteúdo, objetivos e contexto da turma..." />
-              </Field>
-              <FileUploadZone
-                files={tabFiles.atividade}
-                provider={provider}
-                onAdd={handleFileAdd}
-                onRemove={handleFileRemove}
-                onOptimize={f => setToolkit({ fileId: f.id, tab: 'atividade' })}
-              />
-            </FormCard>
-          )}
-
-          {/* Botão gerar */}
-          <button
-            style={{ ...s.btnGenerate, ...(loading || limitReached ? s.btnDisabled : {}) }}
-            onClick={handleGenerate}
-            disabled={loading}
-          >
-            {loading ? (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Spinner /> Preparando tudo pra você, Profe...
-              </span>
-            ) : limitReached ? (
-              '⚠ Limite atingido — faça upgrade para continuar'
-            ) : (
-              `✓ Prontificar ${{ plano: 'Plano de Aula', prova: 'Prova', atividade: 'Atividade' }[tab]}`
-            )}
-          </button>
-
-          {/* Resultado */}
-          {(result || loading) && (
-            <div style={s.resultBox}>
-              <div style={s.resultHeader}>
-                <span style={s.resultTitle}>{resultTitle}</span>
-                {result && (
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button style={s.btnSm} onClick={copyResult}>{copied ? 'Copiado!' : 'Copiar'}</button>
-                    <button style={s.btnSm} onClick={() => setResult('')}>Limpar</button>
-                  </div>
-                )}
-              </div>
-              {loading && (
-                <div style={s.loadingRow}>
-                  <Spinner /><span style={{ color: '#888', fontSize: 14 }}>Tudo pronto por aqui, Profe — vai descansar que a gente cuida do resto.</span>
-                </div>
-              )}
-              {result && <pre style={s.resultText}>{result}</pre>}
-              <ExportButtons
-                result={result}
-                title={resultTitle}
-                loading={loading}
-                provider={provider}
-                model={resultModel}
-              />
-              <CloudSaveButtons
-                result={result}
-                title={resultTitle}
-                loading={loading}
-                provider={provider}
-                model={resultModel}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Modal Upgrade */}
-        {(showUpgrade || showProviderUpgrade) && (
-          <div style={s.modalOverlay} onClick={() => { setShowUpgrade(false); setShowProviderUpgrade(false); }}>
-            <div style={s.modal} onClick={e => e.stopPropagation()}>
-              <div style={s.modalTitle}>
-                {showProviderUpgrade
-                  ? `${PROVIDER_LABELS[provider]?.name || 'Esta IA'} está no plano Pro`
-                  : 'Você atingiu o limite do plano gratuito'}
-              </div>
-              <div style={s.modalSub}>
-                {showProviderUpgrade
-                  ? 'Para usar ChatGPT e outros provedores premium, faça upgrade para o plano Pro. Você merece as melhores ferramentas!'
-                  : 'Você usou todas as 10 gerações gratuitas do mês. Seu esforço merece mais — faça upgrade e continue criando sem limite.'}
-              </div>
-              <div style={s.planCards}>
-                {[
-                  { key: 'pro',    price: 'R$ 29/mês',  desc: '150 gerações + escolha de IA',             color: '#003DA5' },
-                  { key: 'school', price: 'R$ 149/mês', desc: 'Ilimitado + todas as IAs + 20 professores', color: '#534AB7' },
-                ].map(p => (
-                  <div key={p.key} style={{ ...s.planCard, borderColor: p.color }}>
-                    <div style={{ ...s.planName, color: p.color }}>{PLAN_LABELS[p.key].name}</div>
-                    <div style={s.planPrice}>{p.price}</div>
-                    <div style={s.planDesc}>{p.desc}</div>
-                    <button style={{ ...s.btnPlan, background: p.color }} onClick={() => {
-                      setPlan(p.key);
-                      localStorage.setItem('pp_plan', p.key);
-                      setShowUpgrade(false);
-                      setShowProviderUpgrade(false);
-                      alert(`Plano ${PLAN_LABELS[p.key].name} ativado! Em produção, aqui entraria o checkout do Stripe.`);
-                    }}>
-                      Assinar {PLAN_LABELS[p.key].name}
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <button style={s.modalClose} onClick={() => { setShowUpgrade(false); setShowProviderUpgrade(false); }}>
-                Continuar no gratuito
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Ferramenta de Redução */}
-        {toolkitFile && (
-          <ToolkitModal
-            file={toolkitFile}
-            onClose={() => setToolkit(null)}
-            onApply={(updates) => {
-              handleFileUpdate(toolkit.tab, toolkit.fileId, updates);
-              setToolkit(null);
-            }}
-          />
-        )}
-      </div>
-    </>
-  );
-}
-
-// ── Utilitários de arquivo ────────────────────────────────────────────────
-
-function toBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader   = new FileReader();
-    reader.onload  = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-async function compressImageB64(b64, mediaType, quality) {
-  return new Promise((resolve, reject) => {
-    const img   = new Image();
-    img.onerror = reject;
-    img.onload  = () => {
-      let { width, height } = img;
-      const MAX = 1920;
-      if (width > MAX || height > MAX) {
-        const scale = MAX / Math.max(width, height);
-        width  = Math.floor(width  * scale);
-        height = Math.floor(height * scale);
+  // ── Correção turma ─────────────────────────────────────────────────────────
+  const corrigirFoto = async () => {
+    if (!gabSelecionado || !turmaFoto || !turmaAlunoNome.trim()) return;
+    setTurmaCorrigindo(true);
+    try {
+      const respostasGab = Object.entries(gabSelecionado.respostas).map(([q, r]) => `Questão ${q}: ${r}`).join(', ');
+      const prompt = `Você está corrigindo uma prova escolar. O gabarito correto é: ${respostasGab}.\n\nAnalise a imagem da prova respondida pelo aluno. Identifique as alternativas marcadas em cada questão.\n\nRetorne APENAS um JSON válido, sem texto adicional, no formato:\n{"01":"A","02":"B","03":"C",...}\n\nSe não conseguir identificar uma questão, use "?".`;
+      const res  = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, provider: 'claude', files: [{ type: 'img', b64: turmaFoto.b64, mediaType: turmaFoto.type, name: 'prova.jpg' }] }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Erro');
+      const jsonStr = data.result.replace(/```json|```/g, '').trim();
+      const respostasAluno = JSON.parse(jsonStr);
+      const totalQ  = Object.keys(gabSelecionado.respostas).length;
+      const valorQ  = parseFloat((gabSelecionado.valorInstrumento || '10,0').replace(',', '.')) / totalQ;
+      let acertos   = 0;
+      const detalhes = {};
+      for (const [q, r] of Object.entries(gabSelecionado.respostas)) {
+        const marcou = respostasAluno[q] || '?';
+        const acertou = marcou === r;
+        if (acertou) acertos++;
+        detalhes[q] = { gabarito: r, aluno: marcou, acertou };
       }
-      const canvas = document.createElement('canvas');
-      canvas.width  = width;
-      canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL('image/jpeg', quality);
-      const newB64  = dataUrl.split(',')[1];
-      resolve({ b64: newB64, size: Math.round(newB64.length * 0.75) });
-    };
-    img.src = `data:${mediaType};base64,${b64}`;
-  });
-}
+      const nota = (acertos * valorQ).toFixed(1).replace('.', ',');
+      const aluno = { nome: turmaAlunoNome.trim(), acertos, total: totalQ, nota, detalhes, foto: turmaFoto.preview };
+      setTurmaAlunos(prev => [...prev, aluno]);
+      setTurmaAlunoNome(''); setTurmaFoto(null);
+    } catch (e) { alert('Erro na correção: ' + e.message); }
+    setTurmaCorrigindo(false);
+  };
 
-async function extractPdfPages(b64, rangeStr, totalPages) {
-  const { PDFDocument } = await import('pdf-lib');
-  const indices = parsePageRange(rangeStr, totalPages || 9999);
-  if (indices.length === 0) throw new Error('Nenhuma página válida no intervalo informado.');
+  const exportarTurmaCSV = () => {
+    if (!gabSelecionado || turmaAlunos.length === 0) return;
+    const questoes = Object.keys(gabSelecionado.respostas);
+    const header   = ['Aluno', 'Nota', ...questoes.map(q => `Q${q}`), 'Acertos', 'Total'];
+    const rows     = turmaAlunos.map(a => [a.nome, a.nota, ...questoes.map(q => a.detalhes[q]?.aluno || '?'), a.acertos, a.total]);
+    const csv = [header, ...rows].map(r => r.join(';')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `Notas_${gabSelecionado.disciplina}_${gabSelecionado.turma}_${gabSelecionado.data.replace(/\//g, '-')}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  };
 
-  const srcBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-  const srcDoc   = await PDFDocument.load(srcBytes);
-  const newDoc   = await PDFDocument.create();
-  const copied   = await newDoc.copyPages(srcDoc, indices);
-  copied.forEach(p => newDoc.addPage(p));
+  const carregarFoto = async file => {
+    if (!file) { setTurmaFoto(null); return; }
+    const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file); });
+    setTurmaFoto({ b64: b64.split(',')[1], type: file.type, preview: b64 });
+  };
 
-  const outBytes = await newDoc.save();
-  // Converte em chunks para evitar stack overflow em arquivos grandes
-  let binary = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < outBytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, outBytes.subarray(i, Math.min(i + CHUNK, outBytes.length)));
-  }
-  return { b64: btoa(binary), size: outBytes.length, pageCount: indices.length };
-}
+  // ── Exports ────────────────────────────────────────────────────────────────
+  const exportPDF = () => {
+    const dp = getDadosProva();
+    const w  = window.open('', '_blank');
+    w.document.open();
+    w.document.write(buildDocHTML(resultTitle, stripMarkdown(result), cfg, dp));
+    w.document.close();
+    // Aguarda imagens carregarem (logo SESI é arquivo externo)
+    w.addEventListener('load', () => setTimeout(() => w.print(), 300));
+    setTimeout(() => { try { if (!w.closed) w.print(); } catch {} }, 3000);
+  };
 
-function parsePageRange(str, total) {
-  const idx = new Set();
-  str.split(',').forEach(part => {
-    part = part.trim();
-    if (!part) return;
-    if (part.includes('-')) {
-      const [a, b] = part.split('-').map(n => parseInt(n.trim()));
-      if (!isNaN(a) && !isNaN(b)) {
-        for (let i = Math.max(1, a); i <= Math.min(total, b); i++) idx.add(i - 1);
-      }
-    } else {
-      const n = parseInt(part);
-      if (!isNaN(n) && n >= 1 && n <= total) idx.add(n - 1);
+  const exportWord = async () => {
+    const dp = getDadosProva();
+    try {
+      const res = await fetch('/api/gerar-docx', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conteudo: result, cfg, dadosProva: dp }) });
+      if (!res.ok) throw new Error('Erro ao gerar documento');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = getFileName(tab, plano, prova, atividade) + '.docx';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch (e) { setErrorMsg('Erro ao gerar Word: ' + e.message + '. Tente novamente.'); }
+  };
+
+  const saveGoogleDrive = async () => {
+    setGdLoading(true); setGdStatus('');
+    try {
+      await new Promise((res, rej) => { if (window.google?.accounts) return res(); const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+      const token = await new Promise((res, rej) => { window.google.accounts.oauth2.initTokenClient({ client_id: GOOGLE_CLIENT_ID, scope: 'https://www.googleapis.com/auth/drive.file', callback: r => r.error ? rej(new Error(r.error)) : res(r.access_token) }).requestAccessToken({ prompt: 'consent' }); });
+      const d   = new Date(); const ano = d.getFullYear().toString(); const mes = MESES[d.getMonth()];
+      const foc = async (name, parent) => { const q = `name='${name}' and mimeType='application/vnd.google-apps.folder'${parent ? " and '" + parent + "' in parents" : ''} and trashed=false`; const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, { headers: { Authorization: 'Bearer ' + token } }); const data = await r.json(); if (data.files?.length > 0) return data.files[0].id; const body = { name, mimeType: 'application/vnd.google-apps.folder' }; if (parent) body.parents = [parent]; return (await (await fetch('https://www.googleapis.com/drive/v3/files', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json()).id; };
+      const rootId = await foc('ProntoProfe', null); const anoId = await foc(ano, rootId); const mesId = await foc(mes, anoId);
+      const meta  = { name: getFileName(tab, plano, prova, atividade), mimeType: 'application/vnd.google-apps.document', parents: [mesId] };
+      const form  = new FormData(); form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' })); form.append('file', new Blob([result], { type: 'text/plain' }));
+      const saved = await (await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&convert=true', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form })).json();
+      setGdStatus(saved.id ? `✓ Salvo em ProntoProfe / ${ano} / ${mes}` : 'Erro ao salvar.');
+    } catch (e) { setGdStatus('Erro: ' + e.message); }
+    setGdLoading(false);
+  };
+
+  const exportExcel = async () => {
+    try {
+      const { exportToExcel } = await import('../lib/exporters/excel');
+      await exportToExcel(result, resultTitle, { provider, model: undefined });
+    } catch (e) { setErrorMsg('Erro ao gerar Excel: ' + e.message); }
+  };
+
+  const saveOneDrive = async () => {
+    if (!process.env.NEXT_PUBLIC_ONEDRIVE_CLIENT_ID) {
+      setOdStatus('Configure NEXT_PUBLIC_ONEDRIVE_CLIENT_ID para habilitar o OneDrive.');
+      return;
     }
-  });
-  return Array.from(idx).sort((a, b) => a - b);
-}
-
-function formatBytes(bytes) {
-  if (!bytes || bytes <= 0) return '0 B';
-  if (bytes < 1024)         return bytes + ' B';
-  if (bytes < 1024 * 1024)  return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-// ── Componentes base ──────────────────────────────────────────────────────
-
-function FormCard({ children }) {
-  return <div style={s.card}>{children}</div>;
-}
-
-function Field({ label, children, style }) {
-  return (
-    <div style={style}>
-      <label style={s.label}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function Row3({ children }) {
-  return <div style={s.grid3}>{children}</div>;
-}
-
-function Row2({ children, style }) {
-  return <div style={{ ...s.grid2, ...style }}>{children}</div>;
-}
-
-function Select({ value, onChange, options }) {
-  return (
-    <select style={s.select} value={value} onChange={e => onChange(e.target.value)}>
-      <option value="">Selecione</option>
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
-  );
-}
-
-function Textarea({ value, onChange, placeholder }) {
-  return (
-    <textarea style={s.textarea} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-  );
-}
-
-function ChipGroup({ options, selected, onToggle }) {
-  return (
-    <div style={s.chipGroup}>
-      {options.map(o => (
-        <button key={o} style={{ ...s.chip, ...(selected.includes(o) ? s.chipSel : {}) }} onClick={() => onToggle(o)}>
-          {o}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Spinner() {
-  return (
-    <span style={s.spinner}>
-      {[0, 0.15, 0.3].map((d, i) => (
-        <span key={i} style={{ ...s.dot, animationDelay: d + 's' }} />
-      ))}
-    </span>
-  );
-}
-
-// ── Upload de arquivos ────────────────────────────────────────────────────
-
-function FileUploadZone({ files, provider, onAdd, onRemove, onOptimize }) {
-  const fileRef        = useRef(null);
-  const [dragging, setDragging] = useState(false);
-  const support        = PROVIDER_FILE_SUPPORT[provider];
-
-  const accept = [
-    ...(support.image ? ['image/jpeg', 'image/png', 'image/webp'] : []),
-    ...(support.pdf   ? ['application/pdf'] : []),
-  ].join(',');
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setDragging(false);
-    onAdd(e.dataTransfer.files);
+    setOdLoading(true); setOdStatus('');
+    try {
+      const dp = getDadosProva();
+      const docRes = await fetch('/api/gerar-docx', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conteudo: result, cfg, dadosProva: dp }) });
+      if (!docRes.ok) throw new Error('Erro ao gerar documento');
+      const blob = await docRes.blob();
+      const { oneDriveSignIn, uploadToOneDrive } = await import('../lib/cloud/onedrive');
+      const token = await oneDriveSignIn();
+      const saved = await uploadToOneDrive(token, blob, 'word');
+      setOdStatus(saved.link ? `✓ Salvo no OneDrive` : 'Erro ao salvar.');
+    } catch (e) { setOdStatus('Erro: ' + e.message); }
+    setOdLoading(false);
   };
 
-  if (!support.image && !support.pdf) return null;
+  handleGenerateRef.current = handleGenerate;
 
-  return (
-    <div style={s.fileZone}>
-      <label style={s.label}>Anexar material (opcional)</label>
+  const copyResult = () => { navigator.clipboard.writeText(result); setCopied(true); setTimeout(() => setCopied(false), 1800); };
 
-      <div
-        style={{ ...s.fileDropArea, ...(dragging ? s.fileDropDrag : {}) }}
-        onClick={() => fileRef.current?.click()}
-        onDrop={handleDrop}
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-      >
-        <span style={{ fontSize: 18, flexShrink: 0 }}>📎</span>
-        <div style={s.fileDropText}>
-          Clique ou arraste aqui
-          <span style={s.fileDropSub}>
-            {[support.image && 'Imagens (JPG, PNG)', support.pdf && 'PDF'].filter(Boolean).join(' · ')}
-            {' · máx. 5 MB por arquivo'}
-          </span>
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept={accept}
-          multiple
-          style={{ display: 'none' }}
-          onChange={e => { onAdd(e.target.files); e.target.value = ''; }}
+  // Mostrar tela de login se não autenticado
+  if (status === 'loading') return (
+    <div style={{ minHeight: '100vh', background: '#F7F6F3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui,sans-serif', color: '#888', fontSize: 14 }}>
+      Carregando...
+    </div>
+  );
+  if (status === 'unauthenticated') return <LoginGate />;
+
+  return (<>
+    <Head>
+      <title>ProntoProfe! — Assistente do Professor</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" />
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" />
+    </Head>
+
+    <div style={{ minHeight: '100vh', background: '#F7F6F3', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
+
+      <AppHeader
+        cfg={cfg} plan={plan} usage={usage} session={session}
+        onUpgradeClick={() => setShowUpgrade(true)}
+        onTurmaClick={() => setShowTurma(true)}
+        onConfigClick={() => setShowConfig(true)}
+      />
+
+      <div style={{ maxWidth: 880, margin: '0 auto', padding: '1rem' }}>
+
+        {cfg.nomeProfessora && (
+          <div style={{ background: '#E6F1FB', borderRadius: 8, padding: '7px 14px', marginBottom: 12, fontSize: 13, color: '#0C447C', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>👩‍🏫</span>
+            <span><b>{cfg.nomeProfessora}</b> — {cfg.cidade || 'SESI'}{cfg.docCode ? ' · ' + cfg.docCode : ''}</span>
+            <button style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px', border: '0.5px solid #185FA5', borderRadius: 4, background: 'transparent', color: '#0C447C', cursor: 'pointer' }} onClick={() => setShowConfig(true)}>Editar</button>
+          </div>
+        )}
+
+        <ProviderSelector
+          provider={provider} plan={plan}
+          onProviderChange={setProvider}
+          onUpgradeClick={() => setShowProviderUpgrade(true)}
+        />
+
+        <TabSelector tab={tab} onTabChange={setTab} />
+
+        <DocumentFields tab={tab} plano={plano} prova={prova} atividade={atividade} setPlano={setPlano} setProva={setProva} setAtividade={setAtividade} />
+
+        <ContentSection tab={tab} plano={plano} prova={prova} atividade={atividade} setPlano={setPlano} setProva={setProva} setAtividade={setAtividade} />
+
+        <ModeloUpload modelo={modelo} modeloLoading={modeloLoading} onLoad={loadModelo} onRemove={() => setModelo(null)} />
+
+        <FileUploader
+          files={files} pageRanges={pageRanges}
+          onAddFiles={addFiles} onRemoveFile={removeFile}
+          onExtractPages={extractPages}
+          onPageRangeChange={(idx, range) => setPageRanges(prev => ({ ...prev, [idx]: range }))}
+        />
+
+        <button
+          style={{ width: '100%', padding: 13, background: loading || limitReached ? '#B4B2A9' : '#003DA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: loading || limitReached ? 'default' : 'pointer', marginBottom: errorMsg ? 6 : 12, transition: 'background 0.2s' }}
+          onClick={handleGenerate} disabled={loading}
+        >
+          {loading ? `⏳ ${LOADING_MSGS[loadingMsgIdx]}` : limitReached ? '⚠ Limite atingido' : `✦ Gerar com ${PROVIDER_LABELS[provider].name}`}
+        </button>
+
+        {errorMsg && (
+          <div style={{ background: '#FCEBEB', border: '0.5px solid #E8AAAA', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#A32D2D', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>⚠</span><span style={{ flex: 1 }}>{errorMsg}</span>
+            <button style={{ background: 'transparent', border: 'none', color: '#A32D2D', cursor: 'pointer', fontSize: 14 }} onClick={() => setErrorMsg('')}>✕</button>
+          </div>
+        )}
+
+        <HistoryPanel
+          items={historico}
+          onReload={item => { setResult(item.conteudo || ''); setResultTitle(item.titulo || ''); }}
+        />
+
+        <ResultPanel
+          result={result} loading={loading} resultTitle={resultTitle}
+          loadingMsg={LOADING_MSGS[loadingMsgIdx]}
+          tab={tab} gabaritos={gabaritos} prova={prova}
+          copied={copied}
+          gdLoading={gdLoading} gdStatus={gdStatus}
+          odLoading={odLoading} odStatus={odStatus}
+          onCopy={copyResult} onClear={() => setResult('')}
+          onExportPDF={exportPDF} onExportWord={exportWord} onExportExcel={exportExcel}
+          onSaveGoogleDrive={saveGoogleDrive} onSaveOneDrive={saveOneDrive}
+          onDownloadGabarito={downloadGabarito}
         />
       </div>
 
-      {files.length > 0 && (
-        <div style={s.fileList}>
-          {files.map(f => (
-            <FileItem key={f.id} file={f} onRemove={onRemove} onOptimize={onOptimize} />
-          ))}
-        </div>
+      {showTurma && (
+        <TurmaModal
+          gabaritos={gabaritos} gabSelecionado={gabSelecionado}
+          turmaAlunos={turmaAlunos} turmaAlunoNome={turmaAlunoNome}
+          turmaFoto={turmaFoto} turmaCorrigindo={turmaCorrigindo}
+          onSelectGabarito={g => { setGabSelecionado(g); setTurmaAlunos([]); }}
+          onAlunoNomeChange={setTurmaAlunoNome}
+          onCarregarFoto={carregarFoto}
+          onCorrigirFoto={corrigirFoto}
+          onExportarCSV={exportarTurmaCSV}
+          onDownloadGabarito={downloadGabarito}
+          onClose={() => setShowTurma(false)}
+        />
       )}
 
-      {!support.pdf && (
-        <div style={s.fileNote}>
-          💡 Para enviar PDFs, troque para <strong>Claude</strong>.
-        </div>
+      {showSetup && (
+        <SetupModal
+          setupStep={setupStep} cfg={cfg}
+          onCfgChange={(key, val) => setCfg(c => ({ ...c, [key]: val }))}
+          onNext={() => { if (setupStep < 4) setSetupStep(s => s + 1); else { saveCfg(cfg); setShowSetup(false); setSetupStep(0); } }}
+          onBack={() => setSetupStep(s => s - 1)}
+          onSkip={() => { saveCfg(cfg); setShowSetup(false); }}
+        />
       )}
+
+      {showConfig && (
+        <ConfigModal
+          cfg={cfg}
+          onCfgChange={(key, val) => setCfg(c => ({ ...c, [key]: val }))}
+          onSave={() => { saveCfg(cfg); setShowConfig(false); }}
+          onClose={() => setShowConfig(false)}
+        />
+      )}
+
+      {(showUpgrade || showProviderUpgrade) && (
+        <UpgradeModal
+          showUpgrade={showUpgrade} showProviderUpgrade={showProviderUpgrade}
+          onUpgrade={async planKey => {
+            try {
+              const res = await fetch('/api/upgrade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: planKey }) });
+              if (res.ok) {
+                setPlan(planKey);
+                setShowUpgrade(false);
+                setShowProviderUpgrade(false);
+                setToast({ msg: 'Plano atualizado! Aproveite os novos recursos.', type: 'success' });
+              }
+            } catch { setToast({ msg: 'Erro ao atualizar plano. Tente novamente.', type: 'error' }); }
+          }}
+          onClose={() => { setShowUpgrade(false); setShowProviderUpgrade(false); }}
+        />
+      )}
+
+      <Toast msg={toast?.msg} type={toast?.type} onClose={() => setToast(null)} />
     </div>
-  );
+  </>);
 }
-
-function FileItem({ file, onRemove, onOptimize }) {
-  const showSplit = file.type === 'pdf';
-  const showCompress = file.type === 'img' && file.needsOptimize;
-  return (
-    <div style={s.fileItem}>
-      {file.type === 'img' && file.preview
-        ? <img src={file.preview} alt={file.name} style={s.fileThumb} />
-        : <div style={s.filePdfIcon}>PDF</div>
-      }
-      <div style={s.fileInfo}>
-        <div style={s.fileName} title={file.name}>{file.name}</div>
-        <div style={s.fileMeta}>
-          {formatBytes(file.size)}
-          {file.pageCount ? ` · ${file.pageCount} págs.` : ''}
-          {file.needsOptimize && !showSplit && <span style={s.fileWarnBadge}> · arquivo grande</span>}
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        {showSplit && (
-          <button style={{ ...s.btnFileOpt, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => onOptimize(file)} title="Dividir PDF">
-            ✂ <span style={{ fontSize: 11 }}>Dividir</span>
-          </button>
-        )}
-        {showCompress && (
-          <button style={s.btnFileOpt} onClick={() => onOptimize(file)} title="Comprimir imagem">
-            🔧
-          </button>
-        )}
-        <button style={s.btnFileRm} onClick={() => onRemove(file.id)} title="Remover">
-          ✕
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Ferramenta de Divisão / Compressão ───────────────────────────────────
-
-function getPdfPresets(total) {
-  if (!total || total < 2) return [];
-  const half = Math.ceil(total / 2);
-  const presets = [
-    { label: `1ª metade (1–${half})`,       from: 1,      to: half  },
-    { label: `2ª metade (${half+1}–${total})`, from: half+1, to: total },
-  ];
-  if (total >= 10) presets.push({ label: 'Primeiras 10 págs.', from: 1, to: 10 });
-  if (total >= 5)  presets.push({ label: 'Primeiras 5 págs.',  from: 1, to: 5  });
-  return presets.filter(p => p.from <= p.to && p.from >= 1 && p.to <= total);
-}
-
-function ToolkitModal({ file, onClose, onApply }) {
-  const isImage = file.type === 'img';
-  const total   = file.pageCount || 1;
-
-  const [quality,    setQuality]    = useState(70);
-  const [fromPage,   setFromPage]   = useState(1);
-  const [toPage,     setToPage]     = useState(Math.min(total, 10));
-  const [processing, setProcessing] = useState(false);
-
-  const estSize    = isImage ? Math.round(file.size * (quality / 100) * 0.65) : null;
-  const pagesCount = Math.max(0, toPage - fromPage + 1);
-
-  const handleCompress = async () => {
-    setProcessing(true);
-    try {
-      const res = await compressImageB64(file.b64, file.mediaType, quality / 100);
-      onApply({ b64: res.b64, size: res.size, mediaType: 'image/jpeg', needsOptimize: res.size > FILE_WARN });
-    } catch (e) {
-      alert('Erro ao comprimir: ' + e.message);
-      setProcessing(false);
-    }
-  };
-
-  const handleExtract = async () => {
-    setProcessing(true);
-    try {
-      const res = await extractPdfPages(file.b64, `${fromPage}-${toPage}`, file.pageCount);
-      onApply({ b64: res.b64, size: res.size, pageCount: res.pageCount, needsOptimize: false });
-    } catch (e) {
-      alert('Erro ao recortar: ' + e.message);
-      setProcessing(false);
-    }
-  };
-
-  const applyPreset = (p) => { setFromPage(p.from); setToPage(p.to); };
-
-  return (
-    <div style={s.modalOverlay} onClick={onClose}>
-      <div style={s.modal} onClick={e => e.stopPropagation()}>
-
-        {/* Cabeçalho */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={s.modalTitle}>{isImage ? '🖼 Comprimir Imagem' : '✂ Dividir PDF'}</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999', lineHeight: 1, padding: '0 4px' }}>✕</button>
-        </div>
-
-        <div style={s.toolkitFileInfo}>
-          {isImage ? '🖼️' : '📄'} <strong>{file.name}</strong>
-          <span style={{ color: '#999', fontWeight: 400 }}> · {formatBytes(file.size)}</span>
-          {file.pageCount && <span style={{ color: '#999', fontWeight: 400 }}> · {file.pageCount} páginas</span>}
-        </div>
-
-        {/* ── Imagem ── */}
-        {isImage && (
-          <>
-            <label style={{ ...s.label, marginTop: 16 }}>Qualidade da imagem</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-              <input type="range" min="30" max="90" step="5" value={quality}
-                onChange={e => setQuality(parseInt(e.target.value))} style={{ flex: 1 }} />
-              <span style={{ fontSize: 14, fontWeight: 600, minWidth: 38 }}>{quality}%</span>
-            </div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 20 }}>
-              Tamanho estimado: ~{formatBytes(estSize)}
-            </div>
-            <button style={{ ...s.btnGenerate, marginBottom: 0, ...(processing ? s.btnDisabled : {}) }}
-              onClick={handleCompress} disabled={processing}>
-              {processing ? 'Comprimindo...' : 'Comprimir e substituir'}
-            </button>
-          </>
-        )}
-
-        {/* ── PDF ── */}
-        {!isImage && (
-          <>
-            {/* Total de páginas em destaque */}
-            {file.pageCount && (
-              <div style={{ textAlign: 'center', padding: '16px 0 8px' }}>
-                <div style={{ fontSize: 38, fontWeight: 700, color: '#3D348B', lineHeight: 1 }}>{file.pageCount}</div>
-                <div style={{ fontSize: 12, color: '#9B8BB0', marginTop: 2 }}>páginas no total</div>
-              </div>
-            )}
-
-            {/* Presets rápidos */}
-            {getPdfPresets(file.pageCount).length > 0 && (
-              <>
-                <div style={{ ...s.label, marginTop: 8 }}>Seleções rápidas</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-                  {getPdfPresets(file.pageCount).map(p => (
-                    <button key={p.label}
-                      style={{ ...s.chip, ...(fromPage === p.from && toPage === p.to ? s.chipSel : {}) }}
-                      onClick={() => applyPreset(p)}>
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Seleção manual */}
-            <div style={{ ...s.label }}>Ou escolha as páginas</div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 12 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: '#9B8BB0', marginBottom: 5 }}>DA PÁGINA</div>
-                <input type="number" min={1} max={total} style={{ ...s.input, textAlign: 'center', fontSize: 18, fontWeight: 700 }}
-                  value={fromPage}
-                  onChange={e => {
-                    const v = Math.max(1, Math.min(total, parseInt(e.target.value) || 1));
-                    setFromPage(v);
-                    if (toPage < v) setToPage(v);
-                  }} />
-              </div>
-              <div style={{ fontSize: 22, color: '#C3B1E1', paddingBottom: 10, flexShrink: 0 }}>→</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: '#9B8BB0', marginBottom: 5 }}>ATÉ A PÁGINA</div>
-                <input type="number" min={fromPage} max={total} style={{ ...s.input, textAlign: 'center', fontSize: 18, fontWeight: 700 }}
-                  value={toPage}
-                  onChange={e => {
-                    const v = Math.max(fromPage, Math.min(total, parseInt(e.target.value) || fromPage));
-                    setToPage(v);
-                  }} />
-              </div>
-            </div>
-
-            {/* Preview */}
-            <div style={{ background: '#EDE6F7', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#3D348B', marginBottom: 20, textAlign: 'center' }}>
-              ✓ Você ficará com <strong>{pagesCount} {pagesCount === 1 ? 'página' : 'páginas'}</strong>
-              {file.pageCount && <span style={{ color: '#9B8BB0' }}> de {file.pageCount}</span>}
-            </div>
-
-            <button style={{ ...s.btnGenerate, marginBottom: 0, ...(processing ? s.btnDisabled : {}) }}
-              onClick={handleExtract} disabled={processing}>
-              {processing ? 'Recortando o PDF...' : `✂ Usar páginas ${fromPage} a ${toPage}`}
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Dados ─────────────────────────────────────────────────────────────────
-
-const DISCIPLINAS      = ['Matemática', 'Língua Portuguesa', 'Ciências', 'História', 'Geografia', 'Inglês', 'Educação Física', 'Artes', 'Física', 'Química', 'Biologia', 'Filosofia'];
-const SERIES           = ['1º ano EF I', '2º ano EF I', '3º ano EF I', '4º ano EF I', '5º ano EF I', '6º ano EF II', '7º ano EF II', '8º ano EF II', '9º ano EF II', '1º ano EM', '2º ano EM', '3º ano EM'];
-const SERIES_AGRUPADAS = ['EF I (1º ao 5º)', 'EF II (6º ao 9º)', '1º EM', '2º EM', '3º EM'];
-
-// ── Estilos ───────────────────────────────────────────────────────────────
-
-const s = {
-  // ── Layout ──
-  page:        { minHeight: '100vh', background: '#F8F8F8', fontFamily: "'Inter', 'Quicksand', sans-serif" },
-  header:      { background: '#fff', borderBottom: '0.5px solid #E0D8F0', position: 'sticky', top: 0, zIndex: 100 },
-  headerInner: { maxWidth: 860, margin: '0 auto', padding: '12px 1rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
-  logo:        { width: 36, height: 36, borderRadius: 8, background: '#3D348B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  appName:     { fontSize: 15, fontWeight: 600, color: '#3D348B', lineHeight: 1.2 },
-  appSub:      { fontSize: 11, color: '#9B8BB0' },
-  usageBar:    { display: 'flex', flexDirection: 'column', minWidth: 140 },
-  usageText:   { fontSize: 11, color: '#9B8BB0' },
-  progressTrack: { height: 4, background: '#EDE6F7', borderRadius: 2, overflow: 'hidden' },
-  progressFill:  { height: '100%', borderRadius: 2, transition: 'width 0.3s' },
-  planBadge:   { fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20 },
-  btnUpgrade:  { padding: '6px 14px', background: '#FF7F50', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
-
-  main: { maxWidth: 860, margin: '0 auto', padding: '1.25rem 1rem' },
-
-  // ── Seletor de IA ──
-  aiSelector:      { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' },
-  aiSelectorLabel: { fontSize: 12, fontWeight: 600, color: '#9B8BB0', textTransform: 'uppercase', letterSpacing: '0.04em' },
-  aiButtons:       { display: 'flex', gap: 6, flexWrap: 'wrap' },
-  aiBtn:           { padding: '6px 14px', borderRadius: 20, border: '0.5px solid #D8CEE8', fontSize: 13, fontWeight: 500, cursor: 'pointer', background: 'transparent', color: '#6B5B8A', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 5 },
-  lockIcon:        { fontSize: 11 },
-
-  // ── Tabs ──
-  tabs:      { display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' },
-  tab:       { padding: '7px 16px', borderRadius: 20, border: '0.5px solid #D8CEE8', fontSize: 13, fontWeight: 500, cursor: 'pointer', background: 'transparent', color: '#9B8BB0' },
-  tabActive: { background: '#3D348B', color: '#fff', borderColor: '#3D348B' },
-
-  // ── Formulário ──
-  card:    { background: '#fff', border: '0.5px solid #E0D8F0', borderRadius: 12, padding: '1.25rem', marginBottom: 14 },
-  grid3:   { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 },
-  grid2:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  label:   { fontSize: 11, fontWeight: 600, color: '#9B8BB0', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' },
-  select:  { width: '100%', padding: '8px 10px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, background: '#fff', color: '#3D348B' },
-  input:   { width: '100%', padding: '8px 10px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', color: '#3D348B' },
-  textarea:  { width: '100%', minHeight: 100, padding: '10px 12px', border: '0.5px solid #D8CEE8', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.6, color: '#3D348B' },
-  chipGroup: { display: 'flex', flexWrap: 'wrap', gap: 6 },
-  chip:      { padding: '5px 12px', borderRadius: 20, border: '0.5px solid #D8CEE8', fontSize: 13, cursor: 'pointer', background: 'transparent', color: '#6B5B8A' },
-  chipSel:   { background: '#EDE6F7', color: '#3D348B', borderColor: '#C3B1E1', fontWeight: 600 },
-
-  // ── Botões ──
-  btnGenerate: { width: '100%', padding: '13px', background: '#FF7F50', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 14, letterSpacing: '0.01em' },
-  btnDisabled: { background: '#C8BFD4', cursor: 'default' },
-
-  // ── Resultado ──
-  resultBox:    { background: '#fff', border: '0.5px solid #E0D8F0', borderRadius: 12, padding: '1.25rem' },
-  resultHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  resultTitle:  { fontSize: 14, fontWeight: 600, color: '#3D348B' },
-  btnSm:        { padding: '5px 12px', fontSize: 12, borderRadius: 6, border: '0.5px solid #D8CEE8', background: '#fff', color: '#6B5B8A', cursor: 'pointer' },
-  loadingRow:   { display: 'flex', alignItems: 'center', gap: 10, padding: '1rem 0', color: '#9B8BB0' },
-  resultText:   { fontSize: 14, color: '#3D348B', lineHeight: 1.75, whiteSpace: 'pre-wrap', fontFamily: 'inherit' },
-
-  spinner: { display: 'inline-flex', gap: 4, alignItems: 'center' },
-  dot:     { width: 7, height: 7, borderRadius: '50%', background: '#FF7F50', display: 'inline-block', animation: 'bounce 0.8s infinite', animationFillMode: 'both' },
-
-  // ── Upload de arquivos ──
-  fileZone:     { marginTop: 4 },
-  fileDropArea: { border: '1.5px dashed #D8CEE8', borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', background: '#FDFCFF', transition: 'border-color 0.15s, background 0.15s', userSelect: 'none' },
-  fileDropDrag: { borderColor: '#C3B1E1', background: '#EDE6F7' },
-  fileDropText: { fontSize: 13, color: '#9B8BB0', display: 'flex', flexDirection: 'column', gap: 2 },
-  fileDropSub:  { fontSize: 11, color: '#C3B1E1' },
-  fileList:     { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 },
-  fileItem:     { display: 'flex', alignItems: 'center', gap: 10, background: '#F8F8F8', border: '0.5px solid #E0D8F0', borderRadius: 8, padding: '8px 10px' },
-  fileThumb:    { width: 36, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 },
-  filePdfIcon:  { width: 36, height: 36, background: '#FF7F50', color: '#fff', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 },
-  fileInfo:     { flex: 1, minWidth: 0 },
-  fileName:     { fontSize: 13, fontWeight: 500, color: '#3D348B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  fileMeta:     { fontSize: 11, color: '#9B8BB0', marginTop: 1 },
-  fileWarnBadge:{ color: '#FF7F50' },
-  fileNote:     { fontSize: 11, color: '#9B8BB0', marginTop: 6 },
-  btnFileOpt:   { padding: '4px 8px', background: '#EDE6F7', border: '0.5px solid #C3B1E1', borderRadius: 5, fontSize: 13, cursor: 'pointer' },
-  btnFileRm:    { padding: '4px 8px', background: 'transparent', border: '0.5px solid #D8CEE8', borderRadius: 5, fontSize: 12, cursor: 'pointer', color: '#9B8BB0' },
-
-  // ── Toolkit ──
-  toolkitFileInfo: { background: '#F8F8F8', border: '0.5px solid #E0D8F0', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#3D348B' },
-
-  // ── Modal ──
-  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(74,59,99,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' },
-  modal:        { background: '#fff', borderRadius: 16, padding: '1.5rem', maxWidth: 480, width: '100%' },
-  modalTitle:   { fontSize: 18, fontWeight: 600, color: '#3D348B', marginBottom: 8 },
-  modalSub:     { fontSize: 14, color: '#6B5B8A', marginBottom: 20, lineHeight: 1.5 },
-  planCards:    { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 },
-  planCard:     { border: '2px solid', borderRadius: 10, padding: '1rem' },
-  planName:     { fontSize: 13, fontWeight: 600, marginBottom: 4 },
-  planPrice:    { fontSize: 20, fontWeight: 600, color: '#3D348B', marginBottom: 4 },
-  planDesc:     { fontSize: 12, color: '#6B5B8A', marginBottom: 12, lineHeight: 1.4 },
-  btnPlan:      { width: '100%', padding: '8px', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  modalClose:   { width: '100%', padding: '8px', background: 'transparent', border: '0.5px solid #D8CEE8', borderRadius: 6, fontSize: 13, color: '#9B8BB0', cursor: 'pointer' },
-};

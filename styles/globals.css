@@ -1,11 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Quicksand:wght@500;600&display=swap');
-
 * {
   box-sizing: border-box;
-}
-
-body {
-  font-family: 'Inter', 'Quicksand', sans-serif;
 }
 
 html, body {
@@ -18,8 +12,19 @@ html, body {
   40% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 @media (max-width: 540px) {
