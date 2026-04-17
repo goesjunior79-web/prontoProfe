@@ -8,6 +8,7 @@ import { buildDocHTML } from '../lib/docBuilder';
 
 import LoginGate       from '../components/LoginGate';
 import AppHeader       from '../components/AppHeader';
+import BottomNav       from '../components/BottomNav';
 import ProviderSelector from '../components/ProviderSelector';
 import TabSelector     from '../components/TabSelector';
 import DocumentFields  from '../components/DocumentFields';
@@ -455,8 +456,6 @@ export default function Home() {
       <AppHeader
         cfg={cfg} plan={plan} usage={usage} session={session}
         onUpgradeClick={() => setShowUpgrade(true)}
-        onTurmaClick={() => setShowTurma(true)}
-        onConfigClick={() => setShowConfig(true)}
       />
 
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '1rem' }}>
@@ -576,6 +575,11 @@ export default function Home() {
       )}
 
       <Toast msg={toast?.msg} type={toast?.type} onClose={() => setToast(null)} />
+
+      <BottomNav
+        onTurmaClick={() => setShowTurma(true)}
+        onConfigClick={() => setShowConfig(true)}
+      />
     </div>
   </>);
 }
