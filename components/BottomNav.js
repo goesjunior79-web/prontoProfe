@@ -1,14 +1,13 @@
 import { useRouter } from 'next/router';
-import { signOut } from 'next-auth/react';
 
 const ITEMS = [
-  { key: 'inicio',  icon: '🏠', label: 'Início',      href: '/' },
-  { key: 'turma',   icon: '📷', label: 'Turma',       action: 'turma' },
-  { key: 'dash',    icon: '📊', label: 'Dashboard',   href: '/dashboard' },
-  { key: 'config',  icon: '⚙️', label: 'Config.',     action: 'config' },
+  { key: 'inicio', icon: '🏠', label: 'Início',      href: '/' },
+  { key: 'turma',  icon: '📷', label: 'Corrigir',    action: 'turma' },
+  { key: 'dash',   icon: '📊', label: 'Dashboard',   href: '/dashboard' },
+  { key: 'config', icon: '⚙️', label: 'Configurar',  action: 'config' },
 ];
 
-export default function BottomNav({ activeKey, onTurmaClick, onConfigClick }) {
+export default function SideNav({ onTurmaClick, onConfigClick }) {
   const router = useRouter();
 
   const handleClick = item => {
@@ -17,74 +16,112 @@ export default function BottomNav({ activeKey, onTurmaClick, onConfigClick }) {
     if (item.href) router.push(item.href);
   };
 
+  const isActive = item =>
+    (item.href === '/' && router.pathname === '/') ||
+    (item.href && item.href !== '/' && router.pathname.startsWith(item.href));
+
   return (
     <>
-      {/* espaçador para o conteúdo não ficar atrás da barra */}
-      <div style={{ height: 72 }} />
+      <style>{`
+        /* ── Sidebar esquerda (desktop) ── */
+        .sidenav {
+          position: fixed;
+          top: 0; left: 0;
+          width: 80px;
+          height: 100vh;
+          background: #fff;
+          border-right: 1px solid #E0DDD5;
+          box-shadow: 2px 0 8px rgba(0,0,0,0.06);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding-top: 12px;
+          gap: 4px;
+          z-index: 200;
+        }
 
-      <nav style={{
-        position: 'fixed',
-        bottom: 0, left: 0, right: 0,
-        zIndex: 200,
-        background: '#fff',
-        borderTop: '1px solid #E0DDD5',
-        boxShadow: '0 -2px 12px rgba(0,0,0,0.08)',
-        display: 'flex',
-        justifyContent: 'space-around',
-        alignItems: 'stretch',
-        height: 64,
-        paddingBottom: 'env(safe-area-inset-bottom)',
-      }}>
-        {ITEMS.map(item => {
-          const isActive = activeKey === item.key ||
-            (item.href === '/' && router.pathname === '/') ||
-            (item.href && item.href !== '/' && router.pathname.startsWith(item.href));
+        .sidenav-logo {
+          font-size: 26px;
+          margin-bottom: 16px;
+          padding: 8px;
+          line-height: 1;
+        }
 
-          return (
-            <button
-              key={item.key}
-              onClick={() => handleClick(item)}
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 3,
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                color: isActive ? '#003DA5' : '#888',
-                transition: 'color 0.15s',
-                padding: '6px 4px',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              {/* círculo de destaque quando ativo */}
-              <span style={{
-                fontSize: 22,
-                lineHeight: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 36,
-                height: 36,
-                borderRadius: 12,
-                background: isActive ? '#E8EFFC' : 'transparent',
-                transition: 'background 0.15s',
-              }}>
-                {item.icon}
-              </span>
-              <span style={{
-                fontSize: 10,
-                fontWeight: isActive ? 600 : 400,
-                letterSpacing: 0.2,
-              }}>
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
+        .sidenav-item {
+          width: 68px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          padding: 10px 4px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          border-radius: 14px;
+          transition: background 0.15s, color 0.15s;
+          color: #888;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .sidenav-item:hover { background: #F1EFE8; color: #333; }
+        .sidenav-item.active { background: #E8EFFC; color: #003DA5; }
+
+        .sidenav-icon { font-size: 22px; line-height: 1; }
+        .sidenav-label { font-size: 10px; font-weight: 500; letter-spacing: 0.2px; }
+        .sidenav-item.active .sidenav-label { font-weight: 700; }
+
+        /* margem no conteúdo para compensar a sidebar */
+        .sidenav-offset { margin-left: 80px; }
+
+        /* ── Barra inferior (mobile) ── */
+        @media (max-width: 640px) {
+          .sidenav {
+            top: auto; bottom: 0; left: 0; right: 0;
+            width: 100%;
+            height: 64px;
+            flex-direction: row;
+            justify-content: space-around;
+            padding-top: 0;
+            padding-bottom: env(safe-area-inset-bottom);
+            border-right: none;
+            border-top: 1px solid #E0DDD5;
+            box-shadow: 0 -2px 12px rgba(0,0,0,0.07);
+            gap: 0;
+          }
+          .sidenav-logo { display: none; }
+          .sidenav-item {
+            width: auto;
+            flex: 1;
+            padding: 6px 4px;
+            border-radius: 0;
+          }
+          .sidenav-item:hover { background: transparent; }
+          .sidenav-item.active { background: transparent; color: #003DA5; }
+          .sidenav-icon {
+            font-size: 20px;
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 12px;
+          }
+          .sidenav-item.active .sidenav-icon { background: #E8EFFC; }
+          .sidenav-offset { margin-left: 0; margin-bottom: 64px; }
+        }
+      `}</style>
+
+      <nav className="sidenav">
+        <div className="sidenav-logo">👩‍🏫</div>
+
+        {ITEMS.map(item => (
+          <button
+            key={item.key}
+            className={`sidenav-item${isActive(item) ? ' active' : ''}`}
+            onClick={() => handleClick(item)}
+            title={item.label}
+          >
+            <span className="sidenav-icon">{item.icon}</span>
+            <span className="sidenav-label">{item.label}</span>
+          </button>
+        ))}
       </nav>
     </>
   );

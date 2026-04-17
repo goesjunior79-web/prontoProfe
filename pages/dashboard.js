@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { PLAN_LABELS, PROVIDER_LABELS } from '../lib/constants';
+import SideNav from '../components/BottomNav';
 
 const TIPO_ICONS  = { prova: '📋', plano: '📚', atividade: '✏️' };
 const TIPO_LABELS = { prova: 'Provas', plano: 'Planos de Aula', atividade: 'Atividades' };
@@ -48,7 +49,7 @@ export default function Dashboard() {
       <meta name="viewport" content="width=device-width, initial-scale=1" />
     </Head>
 
-    <div style={{ minHeight: '100vh', background: '#F7F6F3', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
+    <div className="sidenav-offset" style={{ minHeight: '100vh', background: '#F7F6F3', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
 
       {/* Header */}
       <div style={{ background: '#fff', borderBottom: '0.5px solid #E0DDD5', position: 'sticky', top: 0, zIndex: 100 }}>
@@ -165,6 +166,7 @@ export default function Dashboard() {
           </div>
         </>)}
       </div>
+      <SideNav />
     </div>
   </>);
 }

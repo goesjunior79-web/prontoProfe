@@ -451,7 +451,7 @@ export default function Home() {
       <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" />
     </Head>
 
-    <div style={{ minHeight: '100vh', background: '#F7F6F3', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
+    <div className="sidenav-offset" style={{ minHeight: '100vh', background: '#F7F6F3', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
 
       <AppHeader
         cfg={cfg} plan={plan} usage={usage} session={session}
