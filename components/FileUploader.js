@@ -3,13 +3,13 @@ import { FILE_ICONS } from '../lib/constants';
 import { fmtSize } from '../lib/utils';
 import { btnPri, secLabel } from './ui';
 
-export default function FileUploader({ files, pageRanges, onAddFiles, onRemoveFile, onExtractPages, onPageRangeChange }) {
+export default function FileUploader({ files, pageRanges, onAddFiles, onRemoveFile, onExtractPages, onPageRangeChange, label }) {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
   return (
     <div style={{ background: '#fff', border: '0.5px solid #E0DDD5', borderRadius: 12, padding: '1rem', marginBottom: 12 }}>
-      <span style={secLabel}>Arquivos de material</span>
+      <span style={secLabel}>{label || 'Arquivos de material'}</span>
       <input
         ref={fileInputRef}
         type="file" multiple

@@ -1,18 +1,22 @@
 import { useRouter } from 'next/router';
 
 const ITEMS = [
-  { key: 'inicio', icon: '🏠', label: 'Início',      href: '/' },
-  { key: 'turma',  icon: '📷', label: 'Corrigir',    action: 'turma' },
-  { key: 'dash',   icon: '📊', label: 'Dashboard',   href: '/dashboard' },
-  { key: 'config', icon: '⚙️', label: 'Configurar',  action: 'config' },
+  { key: 'inicio',   icon: '🏠', label: 'Início',     href: '/' },
+  { key: 'alunos',   icon: '👥', label: 'Alunos',     action: 'alunos' },
+  { key: 'turma',    icon: '📷', label: 'Corrigir',   action: 'turma' },
+  { key: 'projetos', icon: '📁', label: 'Projetos',   action: 'projetos' },
+  { key: 'dash',     icon: '📊', label: 'Dashboard',  href: '/dashboard' },
+  { key: 'config',   icon: '⚙️', label: 'Configurar', action: 'config' },
 ];
 
-export default function SideNav({ onTurmaClick, onConfigClick }) {
+export default function SideNav({ onTurmaClick, onConfigClick, onProjetosClick, onAlunosClick }) {
   const router = useRouter();
 
   const handleClick = item => {
-    if (item.action === 'turma')  return onTurmaClick?.();
-    if (item.action === 'config') return onConfigClick?.();
+    if (item.action === 'turma')    return onTurmaClick?.();
+    if (item.action === 'config')   return onConfigClick?.();
+    if (item.action === 'projetos') return onProjetosClick?.();
+    if (item.action === 'alunos')   return onAlunosClick?.();
     if (item.href) router.push(item.href);
   };
 
@@ -78,7 +82,7 @@ export default function SideNav({ onTurmaClick, onConfigClick }) {
           .sidenav {
             top: auto; bottom: 0; left: 0; right: 0;
             width: 100%;
-            height: 64px;
+            height: 60px;
             flex-direction: row;
             justify-content: space-around;
             padding-top: 0;
@@ -92,19 +96,28 @@ export default function SideNav({ onTurmaClick, onConfigClick }) {
           .sidenav-item {
             width: auto;
             flex: 1;
-            padding: 6px 4px;
+            padding: 5px 2px;
             border-radius: 0;
+            min-width: 0;
           }
           .sidenav-item:hover { background: transparent; }
           .sidenav-item.active { background: transparent; color: #003DA5; }
           .sidenav-icon {
-            font-size: 20px;
-            width: 36px; height: 36px;
+            font-size: 19px;
+            width: 32px; height: 32px;
             display: flex; align-items: center; justify-content: center;
-            border-radius: 12px;
+            border-radius: 10px;
           }
           .sidenav-item.active .sidenav-icon { background: #E8EFFC; }
-          .sidenav-offset { margin-left: 0; margin-bottom: 64px; }
+          .sidenav-label { font-size: 9px; }
+          .sidenav-offset { margin-left: 0; margin-bottom: 60px; }
+        }
+
+        /* Telas muito pequenas: oculta labels dos itens secundários */
+        @media (max-width: 400px) {
+          .sidenav-label { display: none; }
+          .sidenav-item { padding: 8px 2px; }
+          .sidenav-icon { font-size: 22px; width: 36px; height: 36px; }
         }
       `}</style>
 

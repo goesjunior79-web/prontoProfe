@@ -2,7 +2,7 @@ import { signOut } from 'next-auth/react';
 import { PLAN_LIMITS, PLAN_LABELS } from '../lib/constants';
 import { btnPri, btnSec } from './ui';
 
-export default function AppHeader({ cfg, plan, usage, session, onUpgradeClick }) {
+export default function AppHeader({ cfg, plan, usage, session, onUpgradeClick, onTutorialClick }) {
   const usagePct   = plan === 'school' ? 5 : Math.min(100, (usage / PLAN_LIMITS[plan]) * 100);
   const usageColor = usagePct > 80 ? '#A32D2D' : usagePct > 50 ? '#BA7517' : '#3B6D11';
 
@@ -47,6 +47,14 @@ export default function AppHeader({ cfg, plan, usage, session, onUpgradeClick })
             {plan === 'school' ? '∞' : `${usage}/${PLAN_LIMITS[plan]}`}
           </span>
         </div>
+
+        <button
+          onClick={onTutorialClick}
+          title="Tutorial"
+          style={{ ...btnSec, fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          ? Tutorial
+        </button>
 
         {plan !== 'school' && (
           <button style={btnPri} onClick={onUpgradeClick}>Upgrade</button>

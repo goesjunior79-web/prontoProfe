@@ -3,8 +3,9 @@ import Head from 'next/head';
 import { useSession } from 'next-auth/react';
 
 import { PLAN_LIMITS, PROVIDER_LABELS, MESES, LOADING_MSGS } from '../lib/constants';
-import { stripMarkdown, extrairGabarito, getFileName } from '../lib/utils';
+import { stripMarkdown, extrairGabarito, extrairRubrica, getFileName } from '../lib/utils';
 import { buildDocHTML } from '../lib/docBuilder';
+import { buildPlanoHTML } from '../lib/planoBuilder';
 
 import LoginGate       from '../components/LoginGate';
 import AppHeader       from '../components/AppHeader';
@@ -20,6 +21,9 @@ import SetupModal      from '../components/modals/SetupModal';
 import ConfigModal     from '../components/modals/ConfigModal';
 import UpgradeModal    from '../components/modals/UpgradeModal';
 import TurmaModal      from '../components/modals/TurmaModal';
+import ProjetosModal   from '../components/modals/ProjetosModal';
+import AlunosModal     from '../components/modals/AlunosModal';
+import TutorialModal   from '../components/modals/TutorialModal';
 import HistoryPanel    from '../components/HistoryPanel';
 import Toast           from '../components/Toast';
 
@@ -38,6 +42,10 @@ export default function Home() {
   const [showSetup, setShowSetup]                   = useState(false);
   const [showConfig, setShowConfig]                 = useState(false);
   const [showTurma, setShowTurma]                   = useState(false);
+  const [showProjetos, setShowProjetos]             = useState(false);
+  const [showAlunos, setShowAlunos]                 = useState(false);
+  const [showTutorial, setShowTutorial]             = useState(false);
+  const [projetos, setProjetos]                     = useState([]);
 
   const [loading, setLoading]           = useState(false);
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
@@ -63,9 +71,9 @@ export default function Home() {
 
   const [cfg, setCfg] = useState({ nomeProfessora: '', cidade: 'BOTUCATU', docCode: 'CE-228', tipoDoc: 'Prova Objetiva' });
 
-  const [plano, setPlano]       = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', duracao: '50 min', metodos: [], conteudo: '' });
+  const [plano, setPlano]       = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', vigencia: '', duracao: '2 aulas/semana', metodos: [], conteudo: '', alunosEspeciais: '', incluirAvalia: false });
   const [prova, setProva]       = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', dificuldade: 'Intermediário', qtd: '10 questões', tipos: ['Múltipla escolha'], instrucoes: '', conteudo: '', criterios: '', valorInstrumento: '10,0' });
-  const [atividade, setAtividade] = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', tipo: ['Exercícios de fixação'], conteudo: '' });
+  const [atividade, setAtividade] = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', tipos: ['Exercícios de fixação'], conteudo: '' });
 
   const [gabaritos, setGabaritos]       = useState([]);
   const [gabSelecionado, setGabSelecionado] = useState(null);
@@ -81,6 +89,8 @@ export default function Home() {
     else setShowSetup(true);
     const gabs = localStorage.getItem('sesi_gabaritos');
     if (gabs) { try { setGabaritos(JSON.parse(gabs)); } catch (e) {} }
+    const prjs = localStorage.getItem('sesi_projetos');
+    if (prjs) { try { setProjetos(JSON.parse(prjs)); } catch (e) {} }
   }, []);
 
   useEffect(() => {
@@ -95,7 +105,8 @@ export default function Home() {
     return () => clearInterval(id);
   }, [loading]);
 
-  const saveCfg = c => { setCfg(c); localStorage.setItem('sesi_cfg', JSON.stringify(c)); };
+  const saveCfg      = c  => { setCfg(c);      localStorage.setItem('sesi_cfg',      JSON.stringify(c)); };
+  const saveProjetos = ps => { setProjetos(ps); localStorage.setItem('sesi_projetos', JSON.stringify(ps)); };
   const limitReached = plan !== 'school' && usage >= PLAN_LIMITS[plan];
 
   const fetchProfile = async () => {
@@ -129,6 +140,7 @@ export default function Home() {
     turma:            tab === 'plano' ? plano.turma      : tab === 'prova' ? prova.turma      : atividade.turma,
     etapa:            tab === 'plano' ? plano.etapa      : tab === 'prova' ? prova.etapa      : atividade.etapa,
     serie:            tab === 'plano' ? plano.serie      : tab === 'prova' ? prova.serie      : atividade.serie,
+    vigencia:         tab === 'plano' ? plano.vigencia   : '',
     criterios:        tab === 'prova' ? prova.criterios  : '',
     valorInstrumento: tab === 'prova' ? prova.valorInstrumento : '10,0',
   });
@@ -232,20 +244,77 @@ export default function Home() {
 
   // ── Prompt builder ─────────────────────────────────────────────────────────
   const buildPrompt = () => {
+    const projetoAtivo = projetos.find(p => p.ativo);
+    const arquivosCtx = projetoAtivo?.arquivos?.length
+      ? projetoAtivo.arquivos
+          .filter(a => a.texto)
+          .map(a => `\n--- Material do projeto: "${a.nome}"${a.nota ? ' ('+a.nota+')' : ''} ---\n${a.texto.slice(0, 40000)}`)
+          .join('\n')
+      : '';
+    const projetoCtx   = projetoAtivo
+      ? `\n\nDIRETRIZES DO PROJETO "${projetoAtivo.nome}" (${projetoAtivo.periodo}${projetoAtivo.serieAlvo !== 'Todas as séries' ? ' · ' + projetoAtivo.serieAlvo : ''}):\n${projetoAtivo.diretrizes}${arquivosCtx}\n`
+      : '';
     let ctx = '';
     files.filter(f => f.status === 'ok' && f.text).forEach(f => { ctx += `\n\n--- Conteúdo de "${f.name}"${f.note ? ' (' + f.note + ')' : ''} ---\n${f.text.slice(0, 80000)}`; });
     const modeloCtx = modelo?.text ? `\n\nMODELO DE REFERÊNCIA:\n"""\n${modelo.text.slice(0, 8000)}\n"""\n` : modelo?.imgB64 ? '[Imagem do modelo]' : '';
     const fmtQ = `\n\nFORMATO OBRIGATÓRIO — gere APENAS o corpo da prova, sem introdução:\n\nQUESTÃO 01 (X PONTOS)\nENUNCIADO EM MAIÚSCULAS\nA) (    ) OPÇÃO\nB) (    ) OPÇÃO\nC) (    ) OPÇÃO\nD) (    ) OPÇÃO\n\n[demais questões...]\n\nGABARITO:\n01 - A\n02 - B\n[etc]\n\nIMPORTANTE: Use maiúsculas. Inclua GABARITO ao final.`;
     if (tab === 'plano') {
-      const { disciplina, serie, duracao, metodos, conteudo } = plano;
-      return `Você é especialista em educação da rede SESI. Crie um plano de aula completo.${modeloCtx}\nDisciplina: ${disciplina || '?'} | Série: ${serie || '?'} | Duração: ${duracao}${metodos.length ? ' | Metodologias: ' + metodos.join(', ') : ''}\nMaterial:\n${conteudo}${ctx}\nEstrutura: 1.IDENTIFICAÇÃO 2.OBJETIVOS(BNCC) 3.COMPETÊNCIAS SOCIOEMOCIONAIS 4.CONTEÚDOS 5.SEQUÊNCIA DIDÁTICA 6.RECURSOS 7.AVALIAÇÃO 8.REFERÊNCIAS`;
+      const { disciplina, serie, turma, etapa, duracao, vigencia, metodos, conteudo, alunosEspeciais, incluirAvalia } = plano;
+      const alunosCtx = alunosEspeciais?.trim()
+        ? `\n\nALUNOS COM NECESSIDADES ESPECIAIS:\n${alunosEspeciais}\nNa seção FLEXIBILIZAÇÃO DE ESTRATÉGIAS, gere estratégias individualizadas para cada aluno listado acima, mencionando o nome e a condição.`
+        : '';
+      const avaliaSection = incluirAvalia
+        ? `\nPLANO DE AÇÃO AVALIA+:\n[Gere atividades para 5 dias letivos. Para cada dia: Leitura do dia (texto curto), Questão objetiva com descritor Avalia+ vinculado, Nivelamento por matriz de proficiência N1/N2/N3/N4]\n`
+        : '';
+      return `Você é especialista em educação da rede SESI. Crie um Plano de Trabalho Docente (PTD) completo no formato SESI.${modeloCtx}${projetoCtx}${alunosCtx}
+${cfg.nomeProfessora ? 'Professora: ' + cfg.nomeProfessora + (cfg.cidade ? ' — SESI ' + cfg.cidade : '') + '\n' : ''}Disciplina: ${disciplina || '?'} | Série: ${serie || '?'} | Turma: ${turma || '?'} | Etapa: ${etapa || '1ª Etapa'}${vigencia ? ' | Vigência: ' + vigencia : ''}${duracao ? ' | Carga horária: ' + duracao : ''}${metodos.length ? ' | Metodologias: ' + metodos.join(', ') : ''}
+Conteúdo/Contexto:
+${conteudo}${ctx}
+
+FORMATO OBRIGATÓRIO — use exatamente estas seções em MAIÚSCULAS seguidas de dois-pontos:
+
+HABILIDADES:
+• [código BNCC] – [descrição]
+
+UNIDADES DO MATERIAL:
+• [capítulo/livro/recurso]
+
+OBJETIVOS:
+• [objetivo]
+
+EVIDÊNCIAS DE APRENDIZAGEM:
+[instrumentos, descritores e critérios de avaliação]
+
+AÇÕES A DESENVOLVER:
+[estratégias, estações de aprendizagem, organização da aula por níveis N1/N2/N3/N4]
+
+ESTRATÉGIA DE AVANÇO POR NÍVEL:
+N1 → N2
+• [ação]
+N2 → N3
+• [ação]
+N3 → N4
+• [ação]
+
+PLANEJAMENTO INTEGRADO:
+[disciplinas, tema, ações integradas]
+
+RECURSOS DIDÁTICOS:
+• [recurso]
+
+FLEXIBILIZAÇÃO DE ESTRATÉGIAS:
+${alunosEspeciais?.trim() ? '[Estratégias individualizadas por aluno conforme lista acima]' : '[estratégias para estudantes com necessidades específicas, se aplicável]'}
+${avaliaSection}
+IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em cada seção.`;
     }
     if (tab === 'prova') {
       const { disciplina, serie, dificuldade, qtd, tipos, instrucoes, conteudo } = prova;
-      return `Você é especialista em avaliação educacional da rede SESI. Crie uma prova.${modeloCtx}\nDisciplina: ${disciplina || '?'} | Série: ${serie || '?'} | Dificuldade: ${dificuldade} | ${qtd}${tipos.length ? ' | Tipos: ' + tipos.join(', ') : ''}${instrucoes ? ' | Obs: ' + instrucoes : ''}\nConteúdo:\n${conteudo}${ctx}${fmtQ}`;
+      const temDisser = tipos.includes('Dissertativa');
+      const fmtDisser = `\n\nFORMATO OBRIGATÓRIO — prova dissertativa:\n\nQUESTÃO 01 (X PONTOS)\nENUNCIADO COMPLETO EM MAIÚSCULAS — pergunta aberta sem alternativas\n\n[demais questões...]\n\nRUBRICA DE CORREÇÃO:\nQuestão 01 (X pontos)\n- Conteúdo e conhecimento (40%): critério detalhado do que se espera na resposta\n- Argumentação e desenvolvimento (40%): critério de profundidade e coerência\n- Linguagem e coerência (20%): critério gramatical e organizacional\n\n[demais questões na rubrica...]\n\nIMPORTANTE: Inclua SEMPRE a seção "RUBRICA DE CORREÇÃO" ao final, com critérios para cada questão.`;
+      return `Você é especialista em avaliação educacional da rede SESI. Crie uma prova.${modeloCtx}${projetoCtx}\nDisciplina: ${disciplina || '?'} | Série: ${serie || '?'} | Dificuldade: ${dificuldade} | ${qtd}${tipos.length ? ' | Tipos: ' + tipos.join(', ') : ''}${instrucoes ? ' | Obs: ' + instrucoes : ''}\nConteúdo:\n${conteudo}${ctx}${temDisser ? fmtDisser : fmtQ}`;
     }
-    const { disciplina, serie, tipo, conteudo } = atividade;
-    return `Você é especialista em educação da rede SESI. Crie uma atividade pedagógica.${modeloCtx}\nDisciplina: ${disciplina || '?'} | Série: ${serie || '?'}${tipo.length ? ' | Tipo: ' + tipo.join(', ') : ''}\n${conteudo}${ctx}\nEstrutura: 1.TÍTULO 2.OBJETIVO 3.MATERIAIS 4.TEMPO 5.INSTRUÇÕES 6.ATIVIDADE 7.CRITÉRIOS`;
+    const { disciplina, serie, tipos, conteudo } = atividade;
+    return `Você é especialista em educação da rede SESI. Crie uma atividade pedagógica.${modeloCtx}${projetoCtx}\nDisciplina: ${disciplina || '?'} | Série: ${serie || '?'}${tipos.length ? ' | Tipo: ' + tipos.join(', ') : ''}\n${conteudo}${ctx}\nEstrutura: 1.TÍTULO 2.OBJETIVO 3.MATERIAIS 4.TEMPO 5.INSTRUÇÕES 6.ATIVIDADE 7.CRITÉRIOS`;
   };
 
   // ── Generate ───────────────────────────────────────────────────────────────
@@ -253,6 +322,8 @@ export default function Home() {
     if (limitReached) { setShowUpgrade(true); return; }
     const conteudo = tab === 'plano' ? plano.conteudo : tab === 'prova' ? prova.conteudo : atividade.conteudo;
     const hasFile  = files.some(f => f.status === 'ok' && (f.text || f.imgB64));
+    const dp0 = getDadosProva();
+    if (!dp0.disc?.trim() || !dp0.serie?.trim()) { setErrorMsg('Preencha pelo menos Disciplina e Série antes de gerar.'); return; }
     if (!conteudo.trim() && !hasFile) { setErrorMsg('Adicione conteúdo ou envie um arquivo antes de gerar.'); return; }
     if (files.some(f => f.status === 'range')) { setErrorMsg('Extraia as páginas dos PDFs antes de gerar.'); return; }
     setLoading(true); setResult(''); setErrorMsg('');
@@ -277,7 +348,12 @@ export default function Home() {
       const data = await res.json();
       if (data.error === 'auth_required')  { setErrorMsg('Sessão expirada. Recarregue a página e faça login.'); setLoading(false); return; }
       if (data.error === 'upgrade_required' || data.error === 'limit_reached') { setShowUpgrade(true); setLoading(false); return; }
-      if (!res.ok) throw new Error(data.message || 'Erro na geração');
+      if (!res.ok) {
+        const detail = data.detail || '';
+        const isServerNet = detail.includes('fetch') || detail.includes('network') || detail.includes('ENOTFOUND') || detail.includes('ECONNREFUSED');
+        if (isServerNet) throw new Error('servidor_sem_conexao');
+        throw new Error(detail || data.message || 'Erro na geração');
+      }
       const gerado = stripMarkdown(data.result);
       setResult(gerado);
       if (data.usage !== undefined) setUsage(data.usage);
@@ -285,15 +361,20 @@ export default function Home() {
       setToast({ msg: 'Material gerado com sucesso!', type: 'success' });
       fetchHistory();
       if (tab === 'prova') {
-        const respostas = extrairGabarito(data.result);
-        if (Object.keys(respostas).length > 0) {
-          const tituloGab = `Prova ${dp.disc} — ${dp.turma || dp.serie} (${new Date().toLocaleDateString('pt-BR')})`;
-          salvarGabarito(tituloGab, respostas, dp);
+        const tituloGab = `Prova ${dp.disc} — ${dp.turma || dp.serie} (${new Date().toLocaleDateString('pt-BR')})`;
+        const temDisser = prova.tipos.includes('Dissertativa');
+        if (temDisser) {
+          const rubrica = extrairRubrica(data.result);
+          if (rubrica.length > 0) salvarGabarito(tituloGab, {}, dp, rubrica);
+        } else {
+          const respostas = extrairGabarito(data.result);
+          if (Object.keys(respostas).length > 0) salvarGabarito(tituloGab, respostas, dp);
         }
       }
     } catch (e) {
       const msg = e.message || 'Erro desconhecido';
-      if (msg.includes('fetch') || msg.includes('network')) setErrorMsg('Sem conexão. Verifique sua internet e tente novamente.');
+      if (msg === 'servidor_sem_conexao') setErrorMsg('O servidor não conseguiu conectar à IA. Verifique as chaves de API no servidor e tente novamente.');
+      else if (msg.includes('fetch') || msg.includes('network')) setErrorMsg('Sem conexão. Verifique sua internet e tente novamente.');
       else if (msg.includes('timeout') || msg.includes('504')) setErrorMsg('A IA demorou muito. Tente reduzir o conteúdo ou escolha outra IA.');
       else setErrorMsg('Erro ao gerar: ' + msg + '. Tente novamente ou mude de IA.');
     }
@@ -301,8 +382,11 @@ export default function Home() {
   };
 
   // ── Gabarito ───────────────────────────────────────────────────────────────
-  const salvarGabarito = (titulo, respostas, dadosProva) => {
-    const novoGab = { id: Date.now().toString(), titulo, disciplina: dadosProva.disc || '', turma: dadosProva.turma || '', serie: dadosProva.serie || '', etapa: dadosProva.etapa || '', data: new Date().toLocaleDateString('pt-BR'), respostas, valorInstrumento: dadosProva.valorInstrumento || '10,0', qtd: Object.keys(respostas).length };
+  const salvarGabarito = (titulo, respostas, dadosProva, rubrica = null) => {
+    const base = { id: Date.now().toString(), titulo, disciplina: dadosProva.disc || '', turma: dadosProva.turma || '', serie: dadosProva.serie || '', etapa: dadosProva.etapa || '', data: new Date().toLocaleDateString('pt-BR'), valorInstrumento: dadosProva.valorInstrumento || '10,0' };
+    const novoGab = rubrica?.length
+      ? { ...base, tipo: 'dissertativa', rubrica, qtd: rubrica.length, respostas: {} }
+      : { ...base, tipo: 'objetiva', respostas, qtd: Object.keys(respostas).length };
     const lista = [novoGab, ...gabaritos].slice(0, 20);
     setGabaritos(lista);
     localStorage.setItem('sesi_gabaritos', JSON.stringify(lista));
@@ -310,10 +394,20 @@ export default function Home() {
   };
 
   const downloadGabarito = gab => {
-    const linhas = [`GABARITO — ${gab.titulo}`, `Disciplina: ${gab.disciplina} | Turma: ${gab.turma} | Data: ${gab.data}`, '', ...Object.entries(gab.respostas).map(([q, r]) => `Questão ${q}: ${r}`)];
+    let linhas;
+    if (gab.tipo === 'dissertativa' && gab.rubrica?.length) {
+      linhas = [`RUBRICA — ${gab.titulo}`, `Disciplina: ${gab.disciplina} | Turma: ${gab.turma} | Data: ${gab.data}`, ''];
+      gab.rubrica.forEach(q => {
+        linhas.push(`Questão ${q.num} (${q.peso} pontos):`);
+        q.criterios.forEach(c => linhas.push(`  - ${c.nome} (${c.pct}%): ${c.descricao}`));
+        linhas.push('');
+      });
+    } else {
+      linhas = [`GABARITO — ${gab.titulo}`, `Disciplina: ${gab.disciplina} | Turma: ${gab.turma} | Data: ${gab.data}`, '', ...Object.entries(gab.respostas).map(([q, r]) => `Questão ${q}: ${r}`)];
+    }
     const blob = new Blob([linhas.join('\n')], { type: 'text/plain;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `Gabarito_${gab.disciplina}_${gab.data.replace(/\//g, '-')}.txt`;
+    const a = document.createElement('a'); a.href = url; a.download = `${gab.tipo === 'dissertativa' ? 'Rubrica' : 'Gabarito'}_${gab.disciplina}_${gab.data.replace(/\//g, '-')}.txt`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   };
 
@@ -322,6 +416,21 @@ export default function Home() {
     if (!gabSelecionado || !turmaFoto || !turmaAlunoNome.trim()) return;
     setTurmaCorrigindo(true);
     try {
+      // ── Dissertativa ──────────────────────────────────────────────────────
+      if (gabSelecionado.tipo === 'dissertativa') {
+        const valorTotal = parseFloat((gabSelecionado.valorInstrumento || '10,0').replace(',', '.'));
+        const res  = await fetch('/api/corrigir-dissertativa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ foto: { b64: turmaFoto.b64, mediaType: turmaFoto.type }, rubrica: gabSelecionado.rubrica, valorTotal }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro na correção');
+        const nota = data.total.toFixed(1).replace('.', ',');
+        const aluno = { nome: turmaAlunoNome.trim(), nota, total: valorTotal, tipo: 'dissertativa', questoes: data.questoes, comentarioGeral: data.comentarioGeral, foto: turmaFoto.preview };
+        setTurmaAlunos(prev => [...prev, aluno]);
+        setTurmaAlunoNome(''); setTurmaFoto(null);
+        setTurmaCorrigindo(false);
+        return;
+      }
+
+      // ── Objetiva ──────────────────────────────────────────────────────────
       const respostasGab = Object.entries(gabSelecionado.respostas).map(([q, r]) => `Questão ${q}: ${r}`).join(', ');
       const prompt = `Você está corrigindo uma prova escolar. O gabarito correto é: ${respostasGab}.\n\nAnalise a imagem da prova respondida pelo aluno. Identifique as alternativas marcadas em cada questão.\n\nRetorne APENAS um JSON válido, sem texto adicional, no formato:\n{"01":"A","02":"B","03":"C",...}\n\nSe não conseguir identificar uma questão, use "?".`;
       const res  = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, provider: 'claude', files: [{ type: 'img', b64: turmaFoto.b64, mediaType: turmaFoto.type, name: 'prova.jpg' }] }) });
@@ -349,10 +458,17 @@ export default function Home() {
 
   const exportarTurmaCSV = () => {
     if (!gabSelecionado || turmaAlunos.length === 0) return;
-    const questoes = Object.keys(gabSelecionado.respostas);
-    const header   = ['Aluno', 'Nota', ...questoes.map(q => `Q${q}`), 'Acertos', 'Total'];
-    const rows     = turmaAlunos.map(a => [a.nome, a.nota, ...questoes.map(q => a.detalhes[q]?.aluno || '?'), a.acertos, a.total]);
-    const csv = [header, ...rows].map(r => r.join(';')).join('\n');
+    let header, rows;
+    if (gabSelecionado.tipo === 'dissertativa') {
+      const nums = gabSelecionado.rubrica.map(q => q.num);
+      header = ['Aluno', 'Nota Total', ...nums.map(n => `Q${n}`), 'Comentário Geral'];
+      rows   = turmaAlunos.map(a => [a.nome, a.nota, ...nums.map(n => { const q = a.questoes?.find(q => q.num === n); return q ? `${q.nota}/${q.max}` : '?'; }), a.comentarioGeral || '']);
+    } else {
+      const questoes = Object.keys(gabSelecionado.respostas);
+      header = ['Aluno', 'Nota', ...questoes.map(q => `Q${q}`), 'Acertos', 'Total'];
+      rows   = turmaAlunos.map(a => [a.nome, a.nota, ...questoes.map(q => a.detalhes[q]?.aluno || '?'), a.acertos, a.total]);
+    }
+    const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `Notas_${gabSelecionado.disciplina}_${gabSelecionado.turma}_${gabSelecionado.data.replace(/\//g, '-')}.csv`;
@@ -367,25 +483,31 @@ export default function Home() {
 
   // ── Exports ────────────────────────────────────────────────────────────────
   const exportPDF = () => {
-    const dp = getDadosProva();
-    const w  = window.open('', '_blank');
+    const dp  = getDadosProva();
+    // Para o plano, o builder faz a limpeza internamente (preserva **negrito**)
+    const html = tab === 'plano'
+      ? buildPlanoHTML(resultTitle, result, cfg, dp)
+      : buildDocHTML(resultTitle, stripMarkdown(result), cfg, dp);
+    const w = window.open('', '_blank');
     w.document.open();
-    w.document.write(buildDocHTML(resultTitle, stripMarkdown(result), cfg, dp));
+    w.document.write(html);
     w.document.close();
-    // Aguarda imagens carregarem (logo SESI é arquivo externo)
     w.addEventListener('load', () => setTimeout(() => w.print(), 300));
     setTimeout(() => { try { if (!w.closed) w.print(); } catch {} }, 3000);
+    setToast({ msg: '✓ PDF aberto para impressão/download.', type: 'success' });
   };
 
   const exportWord = async () => {
     const dp = getDadosProva();
+    const endpoint = tab === 'plano' ? '/api/gerar-plano-docx' : '/api/gerar-docx';
     try {
-      const res = await fetch('/api/gerar-docx', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conteudo: result, cfg, dadosProva: dp }) });
+      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conteudo: result, cfg, dadosProva: dp }) });
       if (!res.ok) throw new Error('Erro ao gerar documento');
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = getFileName(tab, plano, prova, atividade) + '.docx';
       document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      setToast({ msg: '✓ Documento Word baixado com sucesso.', type: 'success' });
     } catch (e) { setErrorMsg('Erro ao gerar Word: ' + e.message + '. Tente novamente.'); }
   };
 
@@ -409,6 +531,7 @@ export default function Home() {
     try {
       const { exportToExcel } = await import('../lib/exporters/excel');
       await exportToExcel(result, resultTitle, { provider, model: undefined });
+      setToast({ msg: '✓ Planilha Excel baixada com sucesso.', type: 'success' });
     } catch (e) { setErrorMsg('Erro ao gerar Excel: ' + e.message); }
   };
 
@@ -456,6 +579,7 @@ export default function Home() {
       <AppHeader
         cfg={cfg} plan={plan} usage={usage} session={session}
         onUpgradeClick={() => setShowUpgrade(true)}
+        onTutorialClick={() => setShowTutorial(true)}
       />
 
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '1rem' }}>
@@ -467,6 +591,19 @@ export default function Home() {
             <button style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px', border: '0.5px solid #185FA5', borderRadius: 4, background: 'transparent', color: '#0C447C', cursor: 'pointer' }} onClick={() => setShowConfig(true)}>Editar</button>
           </div>
         )}
+
+        {/* Indicador de projeto ativo */}
+        {projetos.find(p => p.ativo) && (() => {
+          const pa = projetos.find(p => p.ativo);
+          return (
+            <div style={{ background: '#FFF8E6', border: '1px solid #F0D080', borderRadius: 8, padding: '7px 14px', marginBottom: 12, fontSize: 13, color: '#7A5A00', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>📁</span>
+              <span><b>{pa.nome}</b> — {pa.periodo}{pa.serieAlvo !== 'Todas as séries' ? ' · ' + pa.serieAlvo : ''}</span>
+              <span style={{ fontSize: 10, padding: '1px 6px', background: '#E8A800', color: '#fff', borderRadius: 20, fontWeight: 700 }}>ATIVO</span>
+              <button style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px', border: '0.5px solid #C89A00', borderRadius: 4, background: 'transparent', color: '#7A5A00', cursor: 'pointer' }} onClick={() => setShowProjetos(true)}>Gerenciar</button>
+            </div>
+          );
+        })()}
 
         <ProviderSelector
           provider={provider} plan={plan}
@@ -480,13 +617,16 @@ export default function Home() {
 
         <ContentSection tab={tab} plano={plano} prova={prova} atividade={atividade} setPlano={setPlano} setProva={setProva} setAtividade={setAtividade} />
 
-        <ModeloUpload modelo={modelo} modeloLoading={modeloLoading} onLoad={loadModelo} onRemove={() => setModelo(null)} />
+        {tab !== 'plano' && (
+          <ModeloUpload modelo={modelo} modeloLoading={modeloLoading} onLoad={loadModelo} onRemove={() => setModelo(null)} />
+        )}
 
         <FileUploader
           files={files} pageRanges={pageRanges}
           onAddFiles={addFiles} onRemoveFile={removeFile}
           onExtractPages={extractPages}
           onPageRangeChange={(idx, range) => setPageRanges(prev => ({ ...prev, [idx]: range }))}
+          label={tab === 'plano' ? '📚 Livro / Material de apoio' : 'Arquivos de material'}
         />
 
         <button
@@ -574,11 +714,29 @@ export default function Home() {
         />
       )}
 
+      {showAlunos && (
+        <AlunosModal onClose={() => setShowAlunos(false)} />
+      )}
+
+      {showTutorial && (
+        <TutorialModal onClose={() => setShowTutorial(false)} />
+      )}
+
+      {showProjetos && (
+        <ProjetosModal
+          projetos={projetos}
+          onSave={saveProjetos}
+          onClose={() => setShowProjetos(false)}
+        />
+      )}
+
       <Toast msg={toast?.msg} type={toast?.type} onClose={() => setToast(null)} />
 
       <BottomNav
         onTurmaClick={() => setShowTurma(true)}
         onConfigClick={() => setShowConfig(true)}
+        onProjetosClick={() => setShowProjetos(true)}
+        onAlunosClick={() => setShowAlunos(true)}
       />
     </div>
   </>);

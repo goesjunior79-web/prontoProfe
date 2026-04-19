@@ -9,8 +9,8 @@ export default function ContentSection({ tab, plano, prova, atividade, setPlano,
 
       {tab === 'plano' && <>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-          <F label="Duração">
-            <S value={plano.duracao} onChange={v => setPlano(p => ({ ...p, duracao: v }))} opts={['50 min', '1h', '1h30', '2h']} />
+          <F label="Aulas por semana">
+            <S value={plano.duracao} onChange={v => setPlano(p => ({ ...p, duracao: v }))} opts={['1 aula/semana', '2 aulas/semana', '3 aulas/semana', '4 aulas/semana', '5 aulas/semana']} />
           </F>
           <F label="Metodologias">
             <Chips
@@ -56,11 +56,11 @@ export default function ContentSection({ tab, plano, prova, atividade, setPlano,
       </>}
 
       {tab === 'atividade' && <>
-        <F label="Tipo" style={{ marginBottom: 10 }}>
+        <F label="Tipos de atividade" style={{ marginBottom: 10 }}>
           <Chips
             opts={['Exercícios', 'Lúdica', 'Pesquisa', 'Produção textual', 'Estudo de caso']}
-            sel={atividade.tipo}
-            toggle={v => setAtividade(p => ({ ...p, tipo: p.tipo.includes(v) ? p.tipo.filter(x => x !== v) : [...p.tipo, v] }))}
+            sel={atividade.tipos}
+            toggle={v => setAtividade(p => ({ ...p, tipos: p.tipos.includes(v) ? p.tipos.filter(x => x !== v) : [...p.tipos, v] }))}
           />
         </F>
         <F label="Conteúdo">

@@ -2,7 +2,6 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getOrCreateProfile, incrementUsage } from '../../lib/db/profile';
 import { saveGeneration } from '../../lib/db/history';
 
@@ -22,10 +21,10 @@ Ao criar materiais pedagógicos, siga SEMPRE estas diretrizes:
 const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
 
 const PROVIDER_MODELS = {
-  claude:  'claude-sonnet-4-6',
-  openai:  'gpt-4o',
-  gemini:  'gemini-2.0-flash',
-  copilot: 'gpt-4-turbo',
+  claude:  'claude-haiku-4-5-20251001',
+  openai:  'gpt-4o-mini',
+  gemini:  'gemini-2.5-flash',
+  copilot: 'gpt-4o-mini',
 };
 
 const PROVIDER_PLANS = {
@@ -46,6 +45,11 @@ export default async function handler(req, res) {
 
   const { prompt, provider = 'claude', files = [], meta = {} } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Prompt obrigatório' });
+
+  const MAX_PROMPT = 120000;
+  if (prompt.length > MAX_PROMPT) {
+    return res.status(400).json({ error: 'prompt_too_large', message: 'Conteúdo muito extenso. Reduza o texto enviado e tente novamente.' });
+  }
 
   // ── Plano e limites (server-authoritative) ────────────────────────────────
   let profile;
@@ -96,10 +100,21 @@ export default async function handler(req, res) {
       result = response.choices[0]?.message?.content || '';
 
     } else if (provider === 'gemini') {
-      const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = client.getGenerativeModel({ model: PROVIDER_MODELS.gemini, systemInstruction: SESI_SYSTEM_PROMPT });
-      const response = await model.generateContent({ contents: [{ role: 'user', parts: buildGeminiParts(prompt, files) }] });
-      result = response.response.text();
+      const geminiParts = buildGeminiParts(prompt, files);
+      geminiParts.unshift({ text: SESI_SYSTEM_PROMPT + '\n\n' });
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/${PROVIDER_MODELS.gemini}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: geminiParts }],
+          }),
+        }
+      );
+      const geminiData = await geminiRes.json();
+      if (!geminiRes.ok) throw new Error(geminiData.error?.message || 'Gemini error');
+      result = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     } else if (provider === 'copilot') {
       const client = new OpenAI({
@@ -111,7 +126,7 @@ export default async function handler(req, res) {
       const response = await client.chat.completions.create({
         model: PROVIDER_MODELS.copilot,
         max_tokens: 8000,
-        messages: [{ role: 'system', content: SESI_SYSTEM_PROMPT }, { role: 'user', content: prompt }],
+        messages: [{ role: 'system', content: SESI_SYSTEM_PROMPT }, ...buildOpenAIMessages(prompt, files)],
       });
       result = response.choices[0]?.message?.content || '';
     }
@@ -137,11 +152,25 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Erro ao chamar provedor:', provider, error.message);
-    return res.status(500).json({
+    console.error('Erro ao chamar provedor:', provider, error.message, error.status);
+    const msg = error.message || '';
+    let statusCode = 500;
+    let userMessage = 'Erro ao gerar conteúdo. Tente novamente.';
+    if (/api.?key|apikey|unauthorized|invalid_api/i.test(msg)) {
+      userMessage = 'Chave de API inválida ou não configurada no servidor.';
+    } else if (/quota|rate.?limit|429|too many/i.test(msg) || error.status === 429) {
+      statusCode = 429;
+      userMessage = 'Limite de requisições da IA atingido. Aguarde alguns minutos e tente novamente.';
+    } else if (/timeout|timed out|504/i.test(msg) || error.status === 504) {
+      statusCode = 504;
+      userMessage = 'A IA demorou muito para responder. Tente reduzir o conteúdo enviado.';
+    } else if (/fetch|network|ECONNREFUSED/i.test(msg)) {
+      userMessage = 'O servidor não conseguiu conectar à IA. Verifique a conectividade.';
+    }
+    return res.status(statusCode).json({
       error:   'api_error',
-      message: 'Erro ao gerar conteúdo. Tente novamente.',
-      detail:  process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: userMessage,
+      detail:  error.message,
     });
   }
 }
@@ -160,8 +189,15 @@ function buildAnthropicMessages(prompt, files) {
 function buildGeminiParts(prompt, files) {
   const parts = [];
   files.forEach(f => {
-    if (f.type === 'img' && f.b64) parts.push({ inlineData: { mimeType: f.mediaType || 'image/jpeg', data: f.b64 } });
-    else if (f.text) parts.push({ text: `Arquivo ${f.name}:\n${f.text}` });
+    if (f.type === 'img' && f.b64) {
+      parts.push({ inlineData: { mimeType: f.mediaType || 'image/jpeg', data: f.b64 } });
+    } else if (f.type === 'pdf') {
+      // Gemini não aceita PDFs via API — o texto extraído já vem em f.text
+      if (f.text) parts.push({ text: `Arquivo PDF "${f.name}":\n${f.text}` });
+      else console.warn('PDF enviado ao Gemini sem texto extraído:', f.name);
+    } else if (f.text) {
+      parts.push({ text: `Arquivo "${f.name}":\n${f.text}` });
+    }
   });
   parts.push({ text: prompt });
   return parts;
