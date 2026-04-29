@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { F, S, T, Chips, secLabel, inp } from './ui';
 
 export default function ContentSection({ tab, plano, prova, atividade, setPlano, setProva, setAtividade }) {
+  const [mostrarCriterios, setMostrarCriterios] = useState(false);
   return (
     <div style={{ background: '#fff', border: '0.5px solid #E0DDD5', borderRadius: 12, padding: '1rem', marginBottom: 12 }}>
       <span style={secLabel}>
@@ -27,31 +29,45 @@ export default function ContentSection({ tab, plano, prova, atividade, setPlano,
 
       {tab === 'prova' && <>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
-          <F label="Dificuldade">
+          <F label="Nível de dificuldade">
             <S value={prova.dificuldade} onChange={v => setProva(p => ({ ...p, dificuldade: v }))} opts={['Básico', 'Intermediário', 'Avançado', 'Misto']} />
           </F>
           <F label="Quantidade">
             <S value={prova.qtd} onChange={v => setProva(p => ({ ...p, qtd: v }))} opts={['5 questões', '8 questões', '10 questões', '15 questões', '20 questões']} />
           </F>
-          <F label="Valor do instrumento">
+          <F label="Valor total da prova">
             <input style={inp} value={prova.valorInstrumento} onChange={e => setProva(p => ({ ...p, valorInstrumento: e.target.value }))} placeholder="Ex: 10,0" />
           </F>
         </div>
-        <F label="Tipo de questões" style={{ marginBottom: 10 }}>
+        <F label="Tipo de questões" style={{ marginBottom: 6 }}>
           <Chips
-            opts={['Múltipla escolha', 'Verdadeiro/Falso', 'Dissertativa', 'Lacunas']}
+            opts={['Múltipla escolha', 'Verdadeiro/Falso', 'Dissertativa (resposta aberta)', 'Preencher lacunas']}
             sel={prova.tipos}
             toggle={v => setProva(p => ({ ...p, tipos: p.tipos.includes(v) ? p.tipos.filter(x => x !== v) : [...p.tipos, v] }))}
           />
         </F>
-        <F label="O que será avaliado? (Critérios de Avaliação)" style={{ marginBottom: 10 }}>
-          <T value={prova.criterios} onChange={v => setProva(p => ({ ...p, criterios: v }))} ph={'- Identificar a finalidade do gênero textual\n- Reconhecer estrutura e elementos do texto\n(um critério por linha)'} />
-        </F>
+        {prova.tipos.includes('Dissertativa (resposta aberta)') && prova.tipos.length > 1 && (
+          <div style={{ fontSize: 11, color: '#7A5A00', background: '#FFF8E6', borderRadius: 7, padding: '6px 10px', marginBottom: 10 }}>
+            ⚠️ Prova mista: será gerada uma <b>rubrica de correção</b> (critérios por questão) em vez de gabarito simples.
+          </div>
+        )}
+        <div style={{ marginBottom: 10 }}>
+          <button
+            type="button"
+            onClick={() => setMostrarCriterios(o => !o)}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, color: '#003DA5', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4, marginBottom: mostrarCriterios ? 6 : 0 }}
+          >
+            {mostrarCriterios ? '▲' : '▼'} Especificar critérios de avaliação <span style={{ color: '#aaa', fontWeight: 400 }}>(opcional)</span>
+          </button>
+          {mostrarCriterios && (
+            <T value={prova.criterios} onChange={v => setProva(p => ({ ...p, criterios: v }))} ph={'- Identificar a finalidade do gênero textual\n- Reconhecer estrutura e elementos do texto\n(um critério por linha)'} />
+          )}
+        </div>
         <F label="Conteúdo avaliado ou envie arquivo abaixo" style={{ marginBottom: 10 }}>
           <T value={prova.conteudo} onChange={v => setProva(p => ({ ...p, conteudo: v }))} ph="Descreva os tópicos ou cole o texto base da prova..." />
         </F>
         <F label="Instruções especiais (opcional)">
-          <input style={inp} value={prova.instrucoes} onChange={e => setProva(p => ({ ...p, instrucoes: e.target.value }))} placeholder="Ex: sem calculadora, incluir gabarito..." />
+          <input style={inp} value={prova.instrucoes} onChange={e => setProva(p => ({ ...p, instrucoes: e.target.value }))} placeholder="Ex: sem calculadora, fórmulas permitidas, folha à parte..." />
         </F>
       </>}
 

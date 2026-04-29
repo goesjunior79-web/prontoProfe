@@ -54,8 +54,8 @@ export default function DocumentFields({ tab, plano, prova, atividade, setPlano,
       {tab === 'plano' && (
         <div style={{ marginTop: 12, borderTop: '0.5px solid #E0DDD5', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-          {/* Vigência */}
-          <F label="Vigência">
+          {/* Período coberto */}
+          <F label="Período coberto por este plano">
             <input
               style={inp}
               value={plano.vigencia || ''}
@@ -64,14 +64,13 @@ export default function DocumentFields({ tab, plano, prova, atividade, setPlano,
             />
           </F>
 
-          {/* Alunos com necessidades especiais */}
-          <F label="Alunos com necessidades especiais">
-            {/* Sugestão de alunos cadastrados com NEE */}
+          {/* Alunos com necessidades educacionais especiais */}
+          <F label="Alunos com necessidades educacionais especiais (opcional)">
             {alunosNEE.length > 0 && (
               <div style={{ background: '#EAF3DE', border: '0.5px solid #B5D98A', borderRadius: 7, padding: '8px 11px', marginBottom: 7, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 15 }}>👥</span>
                 <div style={{ flex: 1, fontSize: 12, color: '#3B6D11' }}>
-                  <b>{alunosNEE.length} aluno{alunosNEE.length > 1 ? 's' : ''} com NEE</b> encontrado{alunosNEE.length > 1 ? 's' : ''} nesta turma:
+                  <b>{alunosNEE.length} aluno{alunosNEE.length > 1 ? 's' : ''} com necessidades especiais</b> nesta turma:
                   {' '}{alunosNEE.map(a => a.nome.split(' ')[0]).join(', ')}
                 </div>
                 <button
@@ -79,7 +78,7 @@ export default function DocumentFields({ tab, plano, prova, atividade, setPlano,
                   onClick={preencherAlunosNEE}
                   style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '0.5px solid #5A9E25', background: '#fff', color: '#3B6D11', cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: 600 }}
                 >
-                  Usar estes alunos
+                  Preencher com estes alunos
                 </button>
               </div>
             )}
@@ -93,7 +92,7 @@ export default function DocumentFields({ tab, plano, prova, atividade, setPlano,
             <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>A IA vai sugerir estratégias individualizadas para cada aluno.</div>
           </F>
 
-          {/* Incluir Plano de Ação Avalia+ */}
+          {/* Incluir Avalia+ */}
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: '#333' }}>
             <input
               type="checkbox"
@@ -101,7 +100,7 @@ export default function DocumentFields({ tab, plano, prova, atividade, setPlano,
               onChange={e => setPlano(p => ({ ...p, incluirAvalia: e.target.checked }))}
               style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#003DA5' }}
             />
-            <span><b>Incluir Plano de Ação Avalia+</b> — gera atividades diárias com descritores e matriz de proficiência</span>
+            <span><b>Incluir atividades de nivelamento</b> — gera atividades para 5 dias letivos com questões por nível de aprendizagem</span>
           </label>
 
         </div>

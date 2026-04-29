@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DISCIPLINAS, SERIES } from '../../lib/constants';
 
 const TURMAS = ['A', 'B', 'C', 'D', 'E'];
@@ -12,7 +12,7 @@ const inp = {
 const sel = { ...inp };
 
 function initAluno() {
-  return { nome: '', turma: 'A', serie: '', disciplina: '', email: '', obs: '' };
+  return { nome: '', turma: 'A', serie: '', disciplina: '', obs: '' };
 }
 
 export default function AlunosModal({ onClose }) {
@@ -21,6 +21,7 @@ export default function AlunosModal({ onClose }) {
   const [busca, setBusca]   = useState('');
   const [editIdx, setEditIdx] = useState(null);
   const [tab, setTab]       = useState('lista');
+  const [confirmarRemover, setConfirmarRemover] = useState(null);
 
   useEffect(() => {
     try {
@@ -55,8 +56,8 @@ export default function AlunosModal({ onClose }) {
   };
 
   const remove = idx => {
-    if (!confirm('Remover este aluno?')) return;
     save(alunos.filter((_, i) => i !== idx));
+    setConfirmarRemover(null);
   };
 
   const cancelEdit = () => {
@@ -66,8 +67,8 @@ export default function AlunosModal({ onClose }) {
   };
 
   const exportCSV = () => {
-    const header = ['Nome', 'Turma', 'Série', 'Disciplina', 'E-mail', 'Observação'];
-    const rows   = alunos.map(a => [a.nome, a.turma, a.serie, a.disciplina, a.email, a.obs]);
+    const header = ['Nome', 'Turma', 'Série', 'Disciplina', 'Observação'];
+    const rows   = alunos.map(a => [a.nome, a.turma, a.serie, a.disciplina, a.obs]);
     const csv    = [header, ...rows].map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(';')).join('\n');
     const blob   = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
     const url    = URL.createObjectURL(blob);
@@ -94,7 +95,7 @@ export default function AlunosModal({ onClose }) {
           </div>
           {alunos.length > 0 && (
             <button onClick={exportCSV} style={{ fontSize: 11, padding: '4px 10px', border: '0.5px solid #D3D1C7', borderRadius: 6, background: '#F7F6F3', cursor: 'pointer', color: '#555' }}>
-              Exportar CSV
+              📥 Baixar lista
             </button>
           )}
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: '0.5px solid #D3D1C7', background: '#F7F6F3', cursor: 'pointer', fontSize: 14, color: '#555' }}>✕</button>
@@ -150,7 +151,13 @@ export default function AlunosModal({ onClose }) {
                       {a.obs && <div style={{ fontSize: 11, color: '#B45309', marginTop: 2 }}>{a.obs}</div>}
                     </div>
                     <button onClick={() => startEdit(realIdx)} style={{ padding: '3px 8px', borderRadius: 5, border: '0.5px solid #D3D1C7', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#555' }}>Editar</button>
-                    <button onClick={() => remove(realIdx)} style={{ padding: '3px 8px', borderRadius: 5, border: '0.5px solid #E8AAAA', background: '#FFF0F0', cursor: 'pointer', fontSize: 11, color: '#A32D2D' }}>✕</button>
+                    {confirmarRemover === realIdx
+                      ? <>
+                          <button onClick={() => remove(realIdx)} style={{ padding: '3px 8px', borderRadius: 5, border: '0.5px solid #E8AAAA', background: '#FFF0F0', cursor: 'pointer', fontSize: 11, color: '#A32D2D', fontWeight: 600 }}>Sim</button>
+                          <button onClick={() => setConfirmarRemover(null)} style={{ padding: '3px 8px', borderRadius: 5, border: '0.5px solid #D3D1C7', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#555' }}>Não</button>
+                        </>
+                      : <button onClick={() => setConfirmarRemover(realIdx)} style={{ padding: '3px 8px', borderRadius: 5, border: '0.5px solid #E8AAAA', background: '#FFF0F0', cursor: 'pointer', fontSize: 11, color: '#A32D2D' }}>✕</button>
+                    }
                   </div>
                 );
               })}
@@ -196,13 +203,8 @@ export default function AlunosModal({ onClose }) {
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#555', marginBottom: 4 }}>E-mail (opcional)</div>
-                <input style={inp} type="email" placeholder="aluno@exemplo.com" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
-
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#555', marginBottom: 4 }}>Observação (NEE, condição, etc.)</div>
-                <input style={inp} placeholder="Ex: TDAH, dislexia, aluno laudado..." value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} />
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#555', marginBottom: 4 }}>Necessidade educacional especial (opcional)</div>
+                <input style={inp} placeholder="Ex: TDAH, dislexia, deficiência visual, aluno laudado..." value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} />
               </div>
 
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>

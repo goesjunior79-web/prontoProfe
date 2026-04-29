@@ -8,8 +8,8 @@ export default function ModeloUpload({ modelo, modeloLoading, onLoad, onRemove }
     <div style={{ background: '#fff', border: '1.5px solid ' + (modelo ? '#3B6D11' : '#E0DDD5'), borderRadius: 12, padding: '1rem', marginBottom: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 500 }}>Modelo de documento <span style={{ fontSize: 11, fontWeight: 400, color: '#888' }}>(opcional)</span></div>
-          <div style={{ fontSize: 11, color: '#aaa' }}>Envie um modelo para a IA seguir o formato</div>
+          <div style={{ fontSize: 13, fontWeight: 500 }}>Usar minha prova anterior como modelo <span style={{ fontSize: 11, fontWeight: 400, color: '#888' }}>(opcional)</span></div>
+          <div style={{ fontSize: 11, color: '#aaa' }}>A IA vai seguir o mesmo estilo e formato da prova enviada</div>
         </div>
         {modelo && <button style={{ ...btnSec, color: '#A32D2D', fontSize: 11 }} onClick={onRemove}>Remover</button>}
       </div>

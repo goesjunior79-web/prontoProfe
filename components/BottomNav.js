@@ -5,8 +5,8 @@ const ITEMS = [
   { key: 'alunos',   icon: '👥', label: 'Alunos',     action: 'alunos' },
   { key: 'turma',    icon: '📷', label: 'Corrigir',   action: 'turma' },
   { key: 'projetos', icon: '📁', label: 'Projetos',   action: 'projetos' },
-  { key: 'dash',     icon: '📊', label: 'Dashboard',  href: '/dashboard' },
-  { key: 'config',   icon: '⚙️', label: 'Configurar', action: 'config' },
+  { key: 'dash',     icon: '📋', label: 'Materiais',   href: '/dashboard' },
+  { key: 'config',   icon: '⚙️', label: 'Meus dados',  action: 'config' },
 ];
 
 export default function SideNav({ onTurmaClick, onConfigClick, onProjetosClick, onAlunosClick }) {

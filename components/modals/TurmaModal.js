@@ -114,7 +114,7 @@ export default function TurmaModal({
         {/* Rubrica dissertativa */}
         {isDisser && gabSelecionado?.rubrica?.length > 0 && (
           <div style={{ background: '#FFF8E6', border: '0.5px solid #F0D080', borderRadius: 10, padding: '10px 13px', marginBottom: 14 }}>
-            <div style={{ fontWeight: 600, fontSize: 12, color: '#7A5A00', marginBottom: 7 }}>📋 Rubrica de correção</div>
+            <div style={{ fontWeight: 600, fontSize: 12, color: '#7A5A00', marginBottom: 7 }}>📋 Critérios de correção desta prova</div>
             {gabSelecionado.rubrica.map(q => (
               <div key={q.num} style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>Q{q.num} — {q.peso} pts</div>

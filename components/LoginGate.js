@@ -7,7 +7,7 @@ export default function LoginGate() {
         <div style={{ fontSize: 48, marginBottom: 12 }}>👩‍🏫</div>
         <div style={{ fontSize: 22, fontWeight: 700, color: '#1a1a18', marginBottom: 6 }}>ProntoProfe!</div>
         <div style={{ fontSize: 14, color: '#5F5E5A', marginBottom: 28, lineHeight: 1.6 }}>
-          Assistente pedagógico com IA para professores da rede SESI.<br/>
+          Assistente pedagógico com IA para a rede SESI.<br/>
           Gere provas, planos de aula e atividades em segundos.
         </div>
         <button
@@ -25,7 +25,7 @@ export default function LoginGate() {
           Entrar com Google
         </button>
         <div style={{ fontSize: 11, color: '#aaa', marginTop: 20, lineHeight: 1.6 }}>
-          Desenvolvido para professores da rede SESI.<br />Seus dados ficam seguros e são usados apenas para personalizar seus materiais.
+          Desenvolvido para a rede SESI.<br />Seus dados ficam seguros e são usados apenas para personalizar seus materiais.
         </div>
       </div>
     </div>

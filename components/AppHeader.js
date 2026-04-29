@@ -28,13 +28,13 @@ export default function AppHeader({ cfg, plan, usage, session, onUpgradeClick, o
           <span style={{ fontSize: 22 }}>👩‍🏫</span>
           <div>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a18' }}>ProntoProfe!</div>
-            <div style={{ fontSize: 10, color: '#888' }}>Assistente pedagógico</div>
+            <div style={{ fontSize: 10, color: '#888' }}>Gerador de materiais</div>
           </div>
         </div>
 
         <div style={{ flex: 1 }} />
 
-        {/* Plano + uso */}
+        {/* Plano + uso — exibe contador só quando ≥70% do limite */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{
             fontSize: 10, fontWeight: 500, padding: '2px 8px',
@@ -43,9 +43,11 @@ export default function AppHeader({ cfg, plan, usage, session, onUpgradeClick, o
           }}>
             {PLAN_LABELS[plan].name}
           </span>
-          <span style={{ fontSize: 11, color: usageColor }}>
-            {plan === 'school' ? '∞' : `${usage}/${PLAN_LIMITS[plan]}`}
-          </span>
+          {usagePct >= 70 && (
+            <span style={{ fontSize: 11, color: usageColor }}>
+              {plan === 'school' ? 'Ilimitado' : `${usage} de ${PLAN_LIMITS[plan]} materiais`}
+            </span>
+          )}
         </div>
 
         <button
@@ -53,11 +55,11 @@ export default function AppHeader({ cfg, plan, usage, session, onUpgradeClick, o
           title="Tutorial"
           style={{ ...btnSec, fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
         >
-          ? Tutorial
+          Tutorial
         </button>
 
-        {plan !== 'school' && (
-          <button style={btnPri} onClick={onUpgradeClick}>Upgrade</button>
+        {plan !== 'school' && usagePct >= 80 && (
+          <button style={btnPri} onClick={onUpgradeClick}>Ver planos</button>
         )}
 
         {/* Avatar + sair */}
