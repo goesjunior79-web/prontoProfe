@@ -1,7 +1,6 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import Anthropic from '@anthropic-ai/sdk';
-import OpenAI from 'openai';
 import { getOrCreateProfile, incrementUsage } from '../../lib/db/profile';
 import { saveGeneration } from '../../lib/db/history';
 
@@ -19,20 +18,7 @@ Ao criar materiais pedagógicos, siga SEMPRE estas diretrizes:
 - Seja completo e detalhado — não deixe seções incompletas`;
 
 const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
-
-const PROVIDER_MODELS = {
-  claude:  'claude-haiku-4-5-20251001',
-  openai:  'gpt-4o-mini',
-  gemini:  'gemini-2.5-flash',
-  copilot: 'gpt-4o-mini',
-};
-
-const PROVIDER_PLANS = {
-  claude:  ['free', 'pro', 'school'],
-  openai:  ['pro', 'school'],
-  gemini:  ['pro', 'school'],
-  copilot: ['school'],
-};
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
@@ -43,7 +29,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'auth_required', message: 'Faça login para continuar.' });
   }
 
-  const { prompt, provider = 'claude', files = [], meta = {} } = req.body;
+  const { prompt, files = [], meta = {} } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Prompt obrigatório' });
 
   const MAX_PROMPT = 120000;
@@ -62,13 +48,6 @@ export default async function handler(req, res) {
 
   const { plan } = profile;
 
-  if (!PROVIDER_PLANS[provider]?.includes(plan)) {
-    return res.status(403).json({
-      error: 'upgrade_required',
-      message: `O provedor ${provider} não está disponível no plano ${plan}. Faça upgrade para acessar.`,
-    });
-  }
-
   if (plan !== 'school' && profile.usage >= PLAN_LIMITS[plan]) {
     return res.status(403).json({
       error: 'limit_reached',
@@ -78,58 +57,14 @@ export default async function handler(req, res) {
 
   // ── Geração ───────────────────────────────────────────────────────────────
   try {
-    let result = '';
-
-    if (provider === 'claude') {
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      const response = await client.messages.create({
-        model: PROVIDER_MODELS.claude,
-        max_tokens: 8000,
-        system: SESI_SYSTEM_PROMPT,
-        messages: buildAnthropicMessages(prompt, files),
-      });
-      result = response.content[0]?.text || '';
-
-    } else if (provider === 'openai') {
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const response = await client.chat.completions.create({
-        model: PROVIDER_MODELS.openai,
-        max_tokens: 8000,
-        messages: [{ role: 'system', content: SESI_SYSTEM_PROMPT }, ...buildOpenAIMessages(prompt, files)],
-      });
-      result = response.choices[0]?.message?.content || '';
-
-    } else if (provider === 'gemini') {
-      const geminiParts = buildGeminiParts(prompt, files);
-      geminiParts.unshift({ text: SESI_SYSTEM_PROMPT + '\n\n' });
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/${PROVIDER_MODELS.gemini}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: geminiParts }],
-          }),
-        }
-      );
-      const geminiData = await geminiRes.json();
-      if (!geminiRes.ok) throw new Error(geminiData.error?.message || 'Gemini error');
-      result = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    } else if (provider === 'copilot') {
-      const client = new OpenAI({
-        apiKey: process.env.AZURE_OPENAI_KEY,
-        baseURL: process.env.AZURE_OPENAI_ENDPOINT,
-        defaultQuery: { 'api-version': '2024-02-15-preview' },
-        defaultHeaders: { 'api-key': process.env.AZURE_OPENAI_KEY },
-      });
-      const response = await client.chat.completions.create({
-        model: PROVIDER_MODELS.copilot,
-        max_tokens: 8000,
-        messages: [{ role: 'system', content: SESI_SYSTEM_PROMPT }, ...buildOpenAIMessages(prompt, files)],
-      });
-      result = response.choices[0]?.message?.content || '';
-    }
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const response = await client.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 8000,
+      system: SESI_SYSTEM_PROMPT,
+      messages: buildAnthropicMessages(prompt, files),
+    });
+    const result = response.content[0]?.text || '';
 
     // ── Salvar no banco ───────────────────────────────────────────────────────
     await incrementUsage(session.user.email);
@@ -139,20 +74,19 @@ export default async function handler(req, res) {
       disciplina: meta.disciplina || null,
       serie:      meta.serie      || null,
       turma:      meta.turma      || null,
-      provider,
+      provider:   'claude',
       conteudo:   result,
     });
 
     return res.status(200).json({
       result,
-      provider,
-      model:  PROVIDER_MODELS[provider],
+      model:  CLAUDE_MODEL,
       usage:  profile.usage + 1,
       plan,
     });
 
   } catch (error) {
-    console.error('Erro ao chamar provedor:', provider, error.message, error.status);
+    console.error('Erro ao chamar Claude:', error.message, error.status);
     const msg = error.message || '';
     let statusCode = 500;
     let userMessage = 'Erro ao gerar conteúdo. Tente novamente.';
@@ -186,31 +120,5 @@ function buildAnthropicMessages(prompt, files) {
   return [{ role: 'user', content: parts }];
 }
 
-function buildGeminiParts(prompt, files) {
-  const parts = [];
-  files.forEach(f => {
-    if (f.type === 'img' && f.b64) {
-      parts.push({ inlineData: { mimeType: f.mediaType || 'image/jpeg', data: f.b64 } });
-    } else if (f.type === 'pdf') {
-      // Gemini não aceita PDFs via API — o texto extraído já vem em f.text
-      if (f.text) parts.push({ text: `Arquivo PDF "${f.name}":\n${f.text}` });
-      else console.warn('PDF enviado ao Gemini sem texto extraído:', f.name);
-    } else if (f.text) {
-      parts.push({ text: `Arquivo "${f.name}":\n${f.text}` });
-    }
-  });
-  parts.push({ text: prompt });
-  return parts;
-}
-
-function buildOpenAIMessages(prompt, files) {
-  const parts = [];
-  files.forEach(f => {
-    if (f.type === 'img' && f.b64) parts.push({ type: 'image_url', image_url: { url: `data:${f.mediaType || 'image/jpeg'};base64,${f.b64}` } });
-    else if (f.text) parts.push({ type: 'text', text: `Arquivo ${f.name}:\n${f.text}` });
-  });
-  parts.push({ type: 'text', text: prompt });
-  return [{ role: 'user', content: parts }];
-}
 
 export const config = { api: { bodyParser: { sizeLimit: '12mb' } } };

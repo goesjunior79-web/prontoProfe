@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useSession } from 'next-auth/react';
 
-import { PLAN_LIMITS, PROVIDER_LABELS, MESES, LOADING_MSGS } from '../lib/constants';
+import { PLAN_LIMITS, MESES, LOADING_MSGS } from '../lib/constants';
 import { stripMarkdown, extrairGabarito, extrairRubrica, getFileName } from '../lib/utils';
 import { buildDocHTML } from '../lib/docBuilder';
 import { buildPlanoHTML } from '../lib/planoBuilder';
@@ -10,7 +10,6 @@ import { buildPlanoHTML } from '../lib/planoBuilder';
 import LoginGate       from '../components/LoginGate';
 import AppHeader       from '../components/AppHeader';
 import BottomNav       from '../components/BottomNav';
-import ProviderSelector from '../components/ProviderSelector';
 import TabSelector     from '../components/TabSelector';
 import DocumentFields  from '../components/DocumentFields';
 import ContentSection  from '../components/ContentSection';
@@ -34,11 +33,9 @@ export default function Home() {
 
   const [tab, setTab]       = useState('prova');
   const [plan, setPlan]     = useState('free');
-  const [provider, setProvider] = useState('claude');
   const [usage, setUsage]   = useState(0);
 
   const [showUpgrade, setShowUpgrade]               = useState(false);
-  const [showProviderUpgrade, setShowProviderUpgrade] = useState(false);
   const [showSetup, setShowSetup]                   = useState(false);
   const [showConfig, setShowConfig]                 = useState(false);
   const [showTurma, setShowTurma]                   = useState(false);
@@ -73,7 +70,7 @@ export default function Home() {
 
   const [plano, setPlano]       = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', vigencia: '', duracao: '2 aulas/semana', metodos: [], conteudo: '', alunosEspeciais: '', incluirAvalia: false });
   const [prova, setProva]       = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', dificuldade: 'Intermediário', qtd: '10 questões', tipos: ['Múltipla escolha'], instrucoes: '', conteudo: '', criterios: '', valorInstrumento: '10,0' });
-  const [atividade, setAtividade] = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', tipos: ['Exercícios de fixação'], conteudo: '' });
+  const [atividade, setAtividade] = useState({ disciplina: '', serie: '', turma: '', etapa: '1ª Etapa', tipos: ['Exercícios'], conteudo: '' });
 
   const [gabaritos, setGabaritos]       = useState([]);
   const [gabSelecionado, setGabSelecionado] = useState(null);
@@ -238,7 +235,7 @@ export default function Home() {
         const text = await file.text();
         setModelo({ name: file.name, text, type: 'txt' });
       }
-    } catch (e) { alert('Erro ao ler modelo: ' + e.message); }
+    } catch (e) { setErrorMsg('Não foi possível ler o arquivo. Verifique se é um Word, PDF ou imagem válida.'); }
     setModeloLoading(false);
   };
 
@@ -309,7 +306,7 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
     }
     if (tab === 'prova') {
       const { disciplina, serie, dificuldade, qtd, tipos, instrucoes, conteudo } = prova;
-      const temDisser = tipos.includes('Dissertativa');
+      const temDisser = tipos.some(t => t.startsWith('Dissertativa'));
       const fmtDisser = `\n\nFORMATO OBRIGATÓRIO — prova dissertativa:\n\nQUESTÃO 01 (X PONTOS)\nENUNCIADO COMPLETO EM MAIÚSCULAS — pergunta aberta sem alternativas\n\n[demais questões...]\n\nRUBRICA DE CORREÇÃO:\nQuestão 01 (X pontos)\n- Conteúdo e conhecimento (40%): critério detalhado do que se espera na resposta\n- Argumentação e desenvolvimento (40%): critério de profundidade e coerência\n- Linguagem e coerência (20%): critério gramatical e organizacional\n\n[demais questões na rubrica...]\n\nIMPORTANTE: Inclua SEMPRE a seção "RUBRICA DE CORREÇÃO" ao final, com critérios para cada questão.`;
       return `Você é especialista em avaliação educacional da rede SESI. Crie uma prova.${modeloCtx}${projetoCtx}\nDisciplina: ${disciplina || '?'} | Série: ${serie || '?'} | Dificuldade: ${dificuldade} | ${qtd}${tipos.length ? ' | Tipos: ' + tipos.join(', ') : ''}${instrucoes ? ' | Obs: ' + instrucoes : ''}\nConteúdo:\n${conteudo}${ctx}${temDisser ? fmtDisser : fmtQ}`;
     }
@@ -325,10 +322,10 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
     const dp0 = getDadosProva();
     if (!dp0.disc?.trim() || !dp0.serie?.trim()) { setErrorMsg('Preencha pelo menos Disciplina e Série antes de gerar.'); return; }
     if (!conteudo.trim() && !hasFile) { setErrorMsg('Adicione conteúdo ou envie um arquivo antes de gerar.'); return; }
-    if (files.some(f => f.status === 'range')) { setErrorMsg('Extraia as páginas dos PDFs antes de gerar.'); return; }
+    if (files.some(f => f.status === 'range')) { setErrorMsg("Clique em 'Usar estas páginas' nos PDFs pendentes antes de gerar."); return; }
     setLoading(true); setResult(''); setErrorMsg('');
     const dp = getDadosProva();
-    const titulo = `${tab === 'plano' ? 'Plano de Aula' : tab === 'prova' ? 'Prova' : 'Atividade'}${dp.disc ? ' — ' + dp.disc : ''} · ${PROVIDER_LABELS[provider].name}`;
+    const titulo = `${tab === 'plano' ? 'Plano de Aula' : tab === 'prova' ? 'Prova' : 'Atividade'}${dp.disc ? ' — ' + dp.disc : ''}`;
     setResultTitle(titulo);
     const apiFiles = files.filter(f => f.status === 'ok').map(f => {
       if (f.imgB64) return { type: 'img', b64: f.imgB64, mediaType: f.imgType, name: f.name };
@@ -341,12 +338,12 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: buildPrompt(), provider, files: apiFiles,
+          prompt: buildPrompt(), files: apiFiles,
           meta: { tipo: tab, titulo, disciplina: dp.disc, serie: dp.serie, turma: dp.turma },
         }),
       });
       const data = await res.json();
-      if (data.error === 'auth_required')  { setErrorMsg('Sessão expirada. Recarregue a página e faça login.'); setLoading(false); return; }
+      if (data.error === 'auth_required')  { setErrorMsg('Você foi desconectada. Recarregue a página e entre novamente.'); setLoading(false); return; }
       if (data.error === 'upgrade_required' || data.error === 'limit_reached') { setShowUpgrade(true); setLoading(false); return; }
       if (!res.ok) {
         const detail = data.detail || '';
@@ -362,7 +359,7 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
       fetchHistory();
       if (tab === 'prova') {
         const tituloGab = `Prova ${dp.disc} — ${dp.turma || dp.serie} (${new Date().toLocaleDateString('pt-BR')})`;
-        const temDisser = prova.tipos.includes('Dissertativa');
+        const temDisser = prova.tipos.some(t => t.startsWith('Dissertativa'));
         if (temDisser) {
           const rubrica = extrairRubrica(data.result);
           if (rubrica.length > 0) salvarGabarito(tituloGab, {}, dp, rubrica);
@@ -373,10 +370,10 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
       }
     } catch (e) {
       const msg = e.message || 'Erro desconhecido';
-      if (msg === 'servidor_sem_conexao') setErrorMsg('O servidor não conseguiu conectar à IA. Verifique as chaves de API no servidor e tente novamente.');
-      else if (msg.includes('fetch') || msg.includes('network')) setErrorMsg('Sem conexão. Verifique sua internet e tente novamente.');
-      else if (msg.includes('timeout') || msg.includes('504')) setErrorMsg('A IA demorou muito. Tente reduzir o conteúdo ou escolha outra IA.');
-      else setErrorMsg('Erro ao gerar: ' + msg + '. Tente novamente ou mude de IA.');
+      if (msg === 'servidor_sem_conexao') setErrorMsg('Não foi possível gerar o material. Tente novamente em instantes ou contate o suporte da sua unidade SESI.');
+      else if (msg.includes('fetch') || msg.includes('network')) setErrorMsg('Sem conexão com a internet. Verifique sua conexão e tente novamente.');
+      else if (msg.includes('timeout') || msg.includes('504')) setErrorMsg('A geração demorou demais. Tente: 1) enviar menos páginas do livro, 2) reduzir o texto de conteúdo, 3) tentar novamente.');
+      else setErrorMsg('Não foi possível gerar o material. Tente novamente.');
     }
     setLoading(false);
   };
@@ -452,7 +449,7 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
       const aluno = { nome: turmaAlunoNome.trim(), acertos, total: totalQ, nota, detalhes, foto: turmaFoto.preview };
       setTurmaAlunos(prev => [...prev, aluno]);
       setTurmaAlunoNome(''); setTurmaFoto(null);
-    } catch (e) { alert('Erro na correção: ' + e.message); }
+    } catch (e) { setToast({ msg: 'Não foi possível corrigir esta prova. Tente uma foto com mais luz e enquadramento melhor.', type: 'error' }); }
     setTurmaCorrigindo(false);
   };
 
@@ -508,7 +505,7 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
       const a = document.createElement('a'); a.href = url; a.download = getFileName(tab, plano, prova, atividade) + '.docx';
       document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
       setToast({ msg: '✓ Documento Word baixado com sucesso.', type: 'success' });
-    } catch (e) { setErrorMsg('Erro ao gerar Word: ' + e.message + '. Tente novamente.'); }
+    } catch (e) { setErrorMsg('Não foi possível criar o documento Word. Tente novamente.'); }
   };
 
   const saveGoogleDrive = async () => {
@@ -522,22 +519,14 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
       const meta  = { name: getFileName(tab, plano, prova, atividade), mimeType: 'application/vnd.google-apps.document', parents: [mesId] };
       const form  = new FormData(); form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' })); form.append('file', new Blob([result], { type: 'text/plain' }));
       const saved = await (await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&convert=true', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form })).json();
-      setGdStatus(saved.id ? `✓ Salvo em ProntoProfe / ${ano} / ${mes}` : 'Erro ao salvar.');
-    } catch (e) { setGdStatus('Erro: ' + e.message); }
+      setGdStatus(saved.id ? `✓ Salvo em ProntoProfe / ${ano} / ${mes}` : 'Não foi possível salvar. Tente novamente.');
+    } catch (e) { setGdStatus('Não foi possível salvar no Google Drive. Tente novamente.'); }
     setGdLoading(false);
-  };
-
-  const exportExcel = async () => {
-    try {
-      const { exportToExcel } = await import('../lib/exporters/excel');
-      await exportToExcel(result, resultTitle, { provider, model: undefined });
-      setToast({ msg: '✓ Planilha Excel baixada com sucesso.', type: 'success' });
-    } catch (e) { setErrorMsg('Erro ao gerar Excel: ' + e.message); }
   };
 
   const saveOneDrive = async () => {
     if (!process.env.NEXT_PUBLIC_ONEDRIVE_CLIENT_ID) {
-      setOdStatus('Configure NEXT_PUBLIC_ONEDRIVE_CLIENT_ID para habilitar o OneDrive.');
+      setOdStatus('O OneDrive não está disponível nesta versão. Use o Google Drive ou exporte o arquivo.');
       return;
     }
     setOdLoading(true); setOdStatus('');
@@ -549,8 +538,8 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
       const { oneDriveSignIn, uploadToOneDrive } = await import('../lib/cloud/onedrive');
       const token = await oneDriveSignIn();
       const saved = await uploadToOneDrive(token, blob, 'word');
-      setOdStatus(saved.link ? `✓ Salvo no OneDrive` : 'Erro ao salvar.');
-    } catch (e) { setOdStatus('Erro: ' + e.message); }
+      setOdStatus(saved.link ? `✓ Salvo no OneDrive` : 'Não foi possível salvar. Tente novamente.');
+    } catch (e) { setOdStatus('Não foi possível salvar no OneDrive. Tente novamente.'); }
     setOdLoading(false);
   };
 
@@ -568,7 +557,7 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
 
   return (<>
     <Head>
-      <title>ProntoProfe! — Assistente do Professor</title>
+      <title>ProntoProfe! — Assistente da Professora</title>
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" />
       <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" />
@@ -587,7 +576,7 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
         {cfg.nomeProfessora && (
           <div style={{ background: '#E6F1FB', borderRadius: 8, padding: '7px 14px', marginBottom: 12, fontSize: 13, color: '#0C447C', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>👩‍🏫</span>
-            <span><b>{cfg.nomeProfessora}</b> — {cfg.cidade || 'SESI'}{cfg.docCode ? ' · ' + cfg.docCode : ''}</span>
+            <span><b>{cfg.nomeProfessora}</b>{cfg.cidade ? ' — ' + cfg.cidade : ''}</span>
             <button style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px', border: '0.5px solid #185FA5', borderRadius: 4, background: 'transparent', color: '#0C447C', cursor: 'pointer' }} onClick={() => setShowConfig(true)}>Editar</button>
           </div>
         )}
@@ -605,11 +594,6 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
           );
         })()}
 
-        <ProviderSelector
-          provider={provider} plan={plan}
-          onProviderChange={setProvider}
-          onUpgradeClick={() => setShowProviderUpgrade(true)}
-        />
 
         <TabSelector tab={tab} onTabChange={setTab} />
 
@@ -633,7 +617,7 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
           style={{ width: '100%', padding: 13, background: loading || limitReached ? '#B4B2A9' : '#003DA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: loading || limitReached ? 'default' : 'pointer', marginBottom: errorMsg ? 6 : 12, transition: 'background 0.2s' }}
           onClick={handleGenerate} disabled={loading}
         >
-          {loading ? `⏳ ${LOADING_MSGS[loadingMsgIdx]}` : limitReached ? '⚠ Limite atingido' : `✦ Gerar com ${PROVIDER_LABELS[provider].name}`}
+          {loading ? `⏳ ${LOADING_MSGS[loadingMsgIdx]}` : limitReached ? '⚠ Limite do mês atingido — ver planos' : '✦ Gerar material'}
         </button>
 
         {errorMsg && (
@@ -656,7 +640,7 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
           gdLoading={gdLoading} gdStatus={gdStatus}
           odLoading={odLoading} odStatus={odStatus}
           onCopy={copyResult} onClear={() => setResult('')}
-          onExportPDF={exportPDF} onExportWord={exportWord} onExportExcel={exportExcel}
+          onExportPDF={exportPDF} onExportWord={exportWord}
           onSaveGoogleDrive={saveGoogleDrive} onSaveOneDrive={saveOneDrive}
           onDownloadGabarito={downloadGabarito}
         />
@@ -696,21 +680,20 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
         />
       )}
 
-      {(showUpgrade || showProviderUpgrade) && (
+      {showUpgrade && (
         <UpgradeModal
-          showUpgrade={showUpgrade} showProviderUpgrade={showProviderUpgrade}
+          showUpgrade={showUpgrade}
           onUpgrade={async planKey => {
             try {
               const res = await fetch('/api/upgrade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: planKey }) });
               if (res.ok) {
                 setPlan(planKey);
                 setShowUpgrade(false);
-                setShowProviderUpgrade(false);
                 setToast({ msg: 'Plano atualizado! Aproveite os novos recursos.', type: 'success' });
               }
-            } catch { setToast({ msg: 'Erro ao atualizar plano. Tente novamente.', type: 'error' }); }
+            } catch { setToast({ msg: 'Não foi possível mudar o plano. Tente novamente.', type: 'error' }); }
           }}
-          onClose={() => { setShowUpgrade(false); setShowProviderUpgrade(false); }}
+          onClose={() => setShowUpgrade(false)}
         />
       )}
 

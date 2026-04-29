@@ -1,19 +1,17 @@
 import { PLAN_LABELS } from '../../lib/constants';
 
 const PLANS = [
-  { key: 'pro',    price: 'R$ 29/mês',  desc: '150 gerações + IAs',    color: '#003DA5' },
-  { key: 'school', price: 'R$ 149/mês', desc: 'Ilimitado + todas as IAs', color: '#534AB7' },
+  { key: 'pro',    price: 'R$ 29/mês',  desc: '150 documentos por mês',  color: '#003DA5' },
+  { key: 'school', price: 'R$ 149/mês', desc: 'Documentos ilimitados',    color: '#534AB7' },
 ];
 
-export default function UpgradeModal({ showUpgrade, showProviderUpgrade, onUpgrade, onClose }) {
+export default function UpgradeModal({ showUpgrade, onUpgrade, onClose }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={onClose}>
       <div style={{ background: '#fff', borderRadius: 16, padding: '1.5rem', maxWidth: 460, width: '100%' }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 6 }}>
-          {showProviderUpgrade ? 'IA bloqueada no plano gratuito' : 'Limite atingido'}
-        </div>
+        <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 6 }}>Limite mensal atingido</div>
         <div style={{ fontSize: 13, color: '#5F5E5A', marginBottom: 18 }}>
-          {showProviderUpgrade ? 'Faça upgrade para usar ChatGPT, Gemini e outros.' : 'Você usou todas as gerações do mês.'}
+          Você usou todos os documentos deste mês. Renova no dia 1º do próximo mês, ou mude de plano para continuar agora.
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
           {PLANS.map(p => (

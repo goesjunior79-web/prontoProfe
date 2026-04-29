@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { PROVIDER_LABELS } from '../lib/constants';
 
 const TIPO_ICONS = { prova: '📋', plano: '📚', atividade: '✏️' };
 
@@ -18,7 +17,7 @@ export default function HistoryPanel({ items, onReload }) {
         }}
         onClick={() => setOpen(o => !o)}
       >
-        <span>📖 Histórico recente <span style={{ color: '#888' }}>({items.length})</span></span>
+        <span>🕐 Histórico recente <span style={{ color: '#888' }}>({items.length})</span></span>
         <span style={{ fontSize: 10 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
@@ -35,7 +34,6 @@ export default function HistoryPanel({ items, onReload }) {
                 </div>
                 <div style={{ fontSize: 10, color: '#aaa', marginTop: 1 }}>
                   {item.data}
-                  {item.provider ? ` · ${PROVIDER_LABELS[item.provider]?.name || item.provider}` : ''}
                   {item.serie ? ` · ${item.serie}` : ''}
                 </div>
               </div>
@@ -44,7 +42,7 @@ export default function HistoryPanel({ items, onReload }) {
                   style={{ fontSize: 11, padding: '3px 10px', border: '0.5px solid #D3D1C7', borderRadius: 5, background: 'transparent', color: '#5F5E5A', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}
                   onClick={() => { onReload(item); setOpen(false); }}
                 >
-                  Abrir
+                  Ver resultado
                 </button>
               )}
             </div>
