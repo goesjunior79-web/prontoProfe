@@ -33,3 +33,6 @@ npm-debug.log*
 instalar.ps1
 
 .env*.local
+
+# arquivos de teste local (não versionar)
+public/teste_*
