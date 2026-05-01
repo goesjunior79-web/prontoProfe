@@ -43,6 +43,17 @@ npm run dev
 
 Abra http://localhost:3000 no navegador.
 
+### Rodar testes unitários
+
+```bash
+npm test            # roda todos os testes uma vez
+npm run test:watch  # modo watch (re-roda a cada mudança)
+npm run test:coverage  # gera relatório de cobertura em coverage/
+```
+
+Testes ficam em `__tests__/` (Vitest). Validadores e funções puras devem ter
+cobertura ≥ 80%.
+
 ### 4. Publicar na Vercel
 
 ```bash

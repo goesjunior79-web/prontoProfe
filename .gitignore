@@ -41,3 +41,6 @@ public/teste_*
 # templates institucionais Word ficam só localmente; análises em .md OK
 docs/assets-esposa/*.docx
 public/modelo_*.docx
+
+# vitest / cobertura de testes
+coverage/
