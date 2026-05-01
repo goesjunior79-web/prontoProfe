@@ -634,6 +634,9 @@ project:
       priority: high
       owner: '@dev'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-011-painel
       blocks: [US-011b]
       blocked_by: [US-012]
       description: |
@@ -659,6 +662,9 @@ project:
       priority: high
       owner: '@dev'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-011-painel
       blocks: []
       blocked_by: [US-011a]
       description: |
