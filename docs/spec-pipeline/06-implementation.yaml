@@ -300,6 +300,9 @@ project:
       priority: high
       owner: '@dev'
       size: S
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-012b-criptografia
       blocks: []
       blocked_by: [US-012]
       description: |
