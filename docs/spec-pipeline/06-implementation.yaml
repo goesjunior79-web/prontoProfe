@@ -38,25 +38,32 @@ project:
       priority: high
       owner: '@dev'
       size: S
+      status: completed
+      completed_at: 2026-05-01
+      commit: cc3f18d
+      branch: feature/US-000-test-infra (merged em master)
       blocks: [US-001, US-002, US-003]
       blocked_by: []
       description: |
         Criar estrutura de testes com Vitest. Sem CI no MVP, foco em testes
         executáveis localmente para validadores e funções puras.
       acceptance_criteria:
-        - Vitest instalado em devDependencies
-        - Script `npm test` funcional
-        - Estrutura __tests__/ separada de lib/
-        - 1 teste exemplo passando (smoke test)
-        - .gitignore atualizado (coverage/, etc.)
+        - Vitest instalado em devDependencies (✅ ^2.1.0 → 2.1.9)
+        - Script `npm test` funcional (✅)
+        - Estrutura __tests__/ separada de lib/ (✅)
+        - 1 teste exemplo passando (✅ 3/3 em 2ms)
+        - .gitignore atualizado (✅ coverage/)
       dod:
-        - npm test executa sem erros
-        - README atualizado com como rodar testes
+        - npm test executa sem erros ✅
+        - README atualizado com como rodar testes ✅
       file_list_estimate:
-        - package.json (devDependencies)
+        - package.json (devDependencies + scripts)
+        - package-lock.json
         - vitest.config.js
         - __tests__/smoke.test.js
         - .gitignore
+        - README.md
+        - docs/stories/0.0.test-infra.story.md
       refino: REFINO-006
 
     - id: US-001
