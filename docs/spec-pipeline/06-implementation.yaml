@@ -71,6 +71,10 @@ project:
       priority: critical
       owner: '@dev'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      commit: 8d81c97
+      branch: feature/US-001-prompt-mestre (merged em master)
       blocks: [US-003, todas as gerações]
       blocked_by: [US-000]
       description: |
