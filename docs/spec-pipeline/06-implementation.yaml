@@ -403,6 +403,9 @@ project:
       priority: high
       owner: '@dev'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-007-avaliacao
       blocks: []
       blocked_by: [US-005]
       description: |
@@ -427,6 +430,9 @@ project:
       priority: high
       owner: '@dev'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-007-avaliacao
       blocks: []
       blocked_by: [US-005]
       description: |
