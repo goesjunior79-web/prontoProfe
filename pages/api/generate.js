@@ -3,22 +3,11 @@ import { authOptions } from './auth/[...nextauth]';
 import Anthropic from '@anthropic-ai/sdk';
 import { getOrCreateProfile, incrementUsage } from '../../lib/db/profile';
 import { saveGeneration } from '../../lib/db/history';
-
-const SESI_SYSTEM_PROMPT = `Você é um especialista em educação da rede SESI (Serviço Social da Indústria) do Brasil.
-
-Ao criar materiais pedagógicos, siga SEMPRE estas diretrizes:
-- Use linguagem clara, objetiva e adequada à faixa etária dos alunos
-- Baseie-se na Base Nacional Comum Curricular (BNCC) e nas competências socioemocionais SESI
-- Mantenha formatação profissional, consistente e de fácil leitura
-- Escreva em português brasileiro formal, sem erros gramaticais
-- Estruture o conteúdo com títulos em MAIÚSCULAS para as seções principais
-- Para provas: use o formato QUESTÃO 01, QUESTÃO 02... com alternativas A) B) C) D) e inclua GABARITO ao final
-- Para planos de aula: siga a estrutura SESI padrão com identificação, objetivos, sequência didática e avaliação
-- Para atividades: inclua título, objetivo, materiais, instruções claras e critérios de avaliação
-- Seja completo e detalhado — não deixe seções incompletas`;
+import { PROMPT_MESTRE, VERSION as PROMPT_VERSION, isTipoDeSaidaValido } from '../../lib/prompts/master';
 
 const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const TEMPERATURE = 0.3;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
@@ -29,8 +18,13 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'auth_required', message: 'Faça login para continuar.' });
   }
 
-  const { prompt, files = [], meta = {} } = req.body;
+  const { prompt, tipo_de_saida, files = [], meta = {} } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Prompt obrigatório' });
+
+  // tipo_de_saida é opcional (backward compat). Se vier, validar mas não bloquear.
+  if (tipo_de_saida && !isTipoDeSaidaValido(tipo_de_saida)) {
+    console.warn('tipo_de_saida desconhecido:', tipo_de_saida);
+  }
 
   const MAX_PROMPT = 120000;
   if (prompt.length > MAX_PROMPT) {
@@ -61,15 +55,25 @@ export default async function handler(req, res) {
     const response = await client.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 8000,
-      system: SESI_SYSTEM_PROMPT,
-      messages: buildAnthropicMessages(prompt, files),
+      temperature: TEMPERATURE,
+      // PROMPT MESTRE com Anthropic Prompt Caching (ADR-002).
+      // O system prompt é cacheado por 5min — chamadas subsequentes pagam ~10%
+      // do custo de input dos tokens cacheados.
+      system: [
+        {
+          type: 'text',
+          text: PROMPT_MESTRE,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: buildAnthropicMessages(prompt, tipo_de_saida, files),
     });
     const result = response.content[0]?.text || '';
 
     // ── Salvar no banco ───────────────────────────────────────────────────────
     await incrementUsage(session.user.email);
     await saveGeneration(session.user.email, {
-      tipo:       meta.tipo       || 'prova',
+      tipo:       meta.tipo       || tipo_de_saida || 'prova',
       titulo:     meta.titulo     || null,
       disciplina: meta.disciplina || null,
       serie:      meta.serie      || null,
@@ -80,8 +84,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       result,
-      model:  CLAUDE_MODEL,
-      usage:  profile.usage + 1,
+      model:           CLAUDE_MODEL,
+      tipo_de_saida:   tipo_de_saida || null,
+      prompt_versao:   `master-${PROMPT_VERSION}`,
+      usage:           profile.usage + 1,
       plan,
     });
 
@@ -109,14 +115,19 @@ export default async function handler(req, res) {
   }
 }
 
-function buildAnthropicMessages(prompt, files) {
+function buildAnthropicMessages(prompt, tipoDeSaida, files) {
   const parts = [];
   files.forEach(f => {
     if (f.type === 'pdf' && f.b64)  { parts.push({ type: 'text', text: `Arquivo PDF: ${f.name}` }); parts.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.b64 } }); }
     else if (f.type === 'img' && f.b64) { parts.push({ type: 'text', text: `Imagem: ${f.name}` }); parts.push({ type: 'image', source: { type: 'base64', media_type: f.mediaType || 'image/jpeg', data: f.b64 } }); }
     else if (f.text) parts.push({ type: 'text', text: `Conteúdo de ${f.name}:\n${f.text}` });
   });
-  parts.push({ type: 'text', text: prompt });
+  // tipo_de_saida (quando informado) é injetado antes do prompt para o LLM saber
+  // qual seção do PROMPT MESTRE acionar.
+  const promptFinal = tipoDeSaida
+    ? `Tipo de saída: ${tipoDeSaida}\n\n${prompt}`
+    : prompt;
+  parts.push({ type: 'text', text: promptFinal });
   return [{ role: 'user', content: parts }];
 }
 
