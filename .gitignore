@@ -36,3 +36,8 @@ instalar.ps1
 
 # arquivos de teste local (não versionar)
 public/teste_*
+
+# templates Word com dados pessoais de alunos (LGPD)
+# templates institucionais Word ficam só localmente; análises em .md OK
+docs/assets-esposa/*.docx
+public/modelo_*.docx

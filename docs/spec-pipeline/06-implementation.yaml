@@ -1,0 +1,839 @@
+# =============================================================================
+# SESI Edu — Implementation Plan (Phase 6)
+# =============================================================================
+# Status: Phase 6 do Spec Pipeline AIOX — concluída em 2026-05-01
+# Agente executor: @aiox-master Orion atuando com persona @architect Aria
+# Input: 04-spec.md + 05-critique.md (15 refinamentos incorporados)
+# Output: backlog ordenado pronto para @dev Dex implementar
+# Próximo passo: derivar docs/stories/{epic}.{story}.story.md por demanda
+# =============================================================================
+
+project:
+  name: SESI Edu / ProntoProfe!
+  version: MVP-1.0.0
+  start_date: 2026-05-01
+  estimated_duration: 9-12 weeks
+  branch_strategy: feature/{story-id}-{slug}
+  pr_strategy: 1 PR por story; review opcional em pares; @qa valida AC
+
+# =============================================================================
+# ATTRIBUTES (legend)
+# =============================================================================
+# priority: critical (bloqueante) | high | medium | low
+# owner: @dev | @qa | @architect | @data-engineer | @devops
+# size: XS (≤0.5d) | S (1d) | M (2-3d) | L (4-5d) | XL (≥1 sem)
+
+# =============================================================================
+# EPIC 0 — Bedrock (FASE 0 — 1-2 semanas)
+# =============================================================================
+- epic: EPIC-0
+  name: Bedrock — Pipeline base + System Prompt + Validador
+  goal: Toda a base arquitetural funciona antes de implementar telas
+  duration: 1-2 weeks
+  blocks: [EPIC-1, EPIC-2, EPIC-3, EPIC-4]
+
+  stories:
+    - id: US-000
+      title: Configurar test infrastructure (Vitest)
+      priority: high
+      owner: '@dev'
+      size: S
+      blocks: [US-001, US-002, US-003]
+      blocked_by: []
+      description: |
+        Criar estrutura de testes com Vitest. Sem CI no MVP, foco em testes
+        executáveis localmente para validadores e funções puras.
+      acceptance_criteria:
+        - Vitest instalado em devDependencies
+        - Script `npm test` funcional
+        - Estrutura __tests__/ separada de lib/
+        - 1 teste exemplo passando (smoke test)
+        - .gitignore atualizado (coverage/, etc.)
+      dod:
+        - npm test executa sem erros
+        - README atualizado com como rodar testes
+      file_list_estimate:
+        - package.json (devDependencies)
+        - vitest.config.js
+        - __tests__/smoke.test.js
+        - .gitignore
+      refino: REFINO-006
+
+    - id: US-001
+      title: PROMPT MESTRE em produção (system prompt central)
+      priority: critical
+      owner: '@dev'
+      size: M
+      blocks: [US-003, todas as gerações]
+      blocked_by: [US-000]
+      description: |
+        Substituir SESI_SYSTEM_PROMPT (genérico) em pages/api/generate.js pelo
+        PROMPT MESTRE consolidado. Implementar versionamento + Anthropic Prompt
+        Caching ON.
+      acceptance_criteria:
+        - lib/prompts/master.js exporta PROMPT_MESTRE como string + VERSION
+        - lib/prompts/changelog.md documenta versão atual
+        - pages/api/generate.js usa import + cache_control no system
+        - Aceita tipo_de_saida no request (12 valores enumerados)
+        - Modelo claude-sonnet-4-6, temp 0.3, max_tokens 8000
+        - Smoke test: chamar com tipo "PTD" retorna PTD em 8 seções
+      dod:
+        - PR mergeado em master
+        - Geração funciona em desenvolvimento
+        - Cache hit visível em segunda chamada (logs)
+      file_list_estimate:
+        - lib/prompts/master.js
+        - lib/prompts/changelog.md
+        - pages/api/generate.js
+        - __tests__/api/generate.test.js (mock)
+      refino: REFINO-015
+
+    - id: US-002
+      title: Validador determinístico (lib/validators/)
+      priority: critical
+      owner: '@dev'
+      size: M
+      blocks: [US-003]
+      blocked_by: [US-000]
+      description: |
+        Implementar checks de estrutura/ordem/títulos/termos proibidos em JS puro,
+        sem dependência externa. Cobre 6 estruturas + lista de termos + heurísticas.
+      acceptance_criteria:
+        - lib/validators/structures.js define STRUCTURES por tipo (ptd, aula, avaliacao_capitulo, simulado, rubrica, pauta_observacao, plenaria, pauta_leitura, atividade, observacao, relatorio, painel)
+        - lib/validators/forbiddenTerms.js exporta TERMOS_PROIBIDOS
+        - lib/validators/heuristics.js — verbos no infinitivo, verbo passado, etc.
+        - lib/validators/index.js exporta validateOutput(content, tipo) → { passed, errors[] }
+        - Testes unitários cobrindo cada validador (cobertura ≥80%)
+      dod:
+        - Todos os testes passam
+        - validateOutput retorna estrutura consistente
+      file_list_estimate:
+        - lib/validators/structures.js
+        - lib/validators/forbiddenTerms.js
+        - lib/validators/heuristics.js
+        - lib/validators/index.js
+        - __tests__/validators/*.test.js
+
+    - id: US-003
+      title: Pipeline Generator + Critic (3 etapas)
+      priority: critical
+      owner: '@dev'
+      size: M
+      blocks: [todas as telas]
+      blocked_by: [US-001, US-002]
+      description: |
+        Implementar pipeline em 3 etapas: gerador (PROMPT MESTRE) → validador
+        determinístico → corretor LLM (PROMPT 6 v2). Retry policy max 3 tentativas.
+      acceptance_criteria:
+        - lib/prompts/validator.js exporta PROMPT_6_VALIDADOR (v2)
+        - pages/api/generate.js implementa loop com retry max 3
+        - Custo estimado calculado e logado
+        - Outputs v1 e v2 ambos persistidos em planejamentos (auditoria)
+        - Cache estratégico — separado de PROMPT MESTRE
+      dod:
+        - Geração com retry funcional em casos de falha
+        - Logs claros mostram cada etapa
+        - Custo total estimado por geração visível
+      file_list_estimate:
+        - lib/prompts/validator.js
+        - pages/api/generate.js
+        - lib/llm/pipeline.js (helper)
+      refino: REFINO-002 (caso especial PROMPT 8 — JSON estruturado, ver EPIC-3)
+
+    - id: US-014a
+      title: Modo conservador read-only
+      priority: critical
+      owner: '@dev'
+      size: S
+      blocks: [US-005, US-007a, US-007b]
+      blocked_by: [US-003]
+      description: |
+        Detectar presença de assets institucionais (catálogo descritores, template,
+        logo, brasão) em filesystem/storage. Avisar usuária quando faltar e
+        adaptar o output (omitir seções dependentes).
+      acceptance_criteria:
+        - lib/assets/registry.js verifica disponibilidade dos 6 assets
+        - Banner UI exibido quando algo falta ("Sem catálogo X, descritores não serão gerados")
+        - Backend gera output com placeholders/omissão consistente
+        - Tipos de asset:
+          - catalogo_descritores_avalia (.json)
+          - template_word_ptd (.docx)
+          - template_word_prova (.docx) — já temos
+          - logo_sesi (.jpeg) — já temos 2 versões
+          - brasao_escola (.png) — fallback: logo SESI
+          - cartao_resposta (.docx)
+          - modelo_relatorio (.docx)
+      dod:
+        - Funciona com 0 assets disponíveis (modo full conservative)
+        - Funciona com todos disponíveis (modo full)
+        - Modos parciais avisam corretamente
+      file_list_estimate:
+        - lib/assets/registry.js
+        - components/AssetWarningBanner.js
+      refino: REFINO-001 (split de US-014)
+
+# =============================================================================
+# EPIC 1 — DB + Auth (FASE 1 — 1 semana)
+# =============================================================================
+- epic: EPIC-1
+  name: DB + Auth — Persistência e identidade
+  goal: Supabase configurado, NextAuth ↔ Supabase sync, alunos persistentes
+  duration: 1 week
+  blocks: [EPIC-2, EPIC-3]
+
+  stories:
+    - id: US-004
+      title: Schema do banco + migrations Supabase
+      priority: critical
+      owner: '@data-engineer'
+      size: M
+      blocks: [US-004a, US-012]
+      blocked_by: [US-014a]
+      description: |
+        Criar 4 tabelas (alunos, avaliacoes, planejamentos, acessos_dados) com RLS
+        desabilitado no MVP (Opção A — service_role). Storage buckets criados.
+      acceptance_criteria:
+        - supabase/migrations/001_init.sql cria todas as tabelas
+        - Tabela usuarios criada (não Supabase Auth nativo)
+        - Indexes presentes em user_id, aluno_id, capitulo
+        - CHECK constraints (nivel, tipo)
+        - FKs com ON DELETE CASCADE
+        - Buckets institutional-assets (public) + user-assets (private) criados
+        - Comando `supabase db push` executa sem erro
+      dod:
+        - Schema verificado com supabase CLI
+        - Documentação de schema atualizada em docs/specs/SCHEMA-DB.md
+      file_list_estimate:
+        - supabase/migrations/001_init.sql
+        - supabase/config.toml (se necessário)
+        - docs/specs/SCHEMA-DB.md (atualização)
+      includes_adr: ADR-006
+
+    - id: US-004a
+      title: Sincronização NextAuth ↔ Supabase usuários
+      priority: critical
+      owner: '@dev'
+      size: M
+      blocks: [US-012, todas operações por user_id]
+      blocked_by: [US-004]
+      description: |
+        Criar/atualizar registro em tabela usuarios ao fazer login Google. NextAuth
+        retorna sub (Google ID), gerar UUID Supabase compatível. Hook events.signIn.
+      acceptance_criteria:
+        - pages/api/auth/[...nextauth].js com callback events.signIn
+        - lib/db/users.js com upsertUser(googleProfile) → retorna user_id UUID
+        - Tabela usuarios populada com (id UUID, google_id, email, nome, criado_em)
+        - Sessões retornam user_id Supabase no req.session.user.id
+      dod:
+        - Login Google cria usuário automaticamente
+        - Login Google subsequente atualiza last_seen
+        - user_id consistente entre sessões
+      file_list_estimate:
+        - pages/api/auth/[...nextauth].js
+        - lib/db/users.js
+        - supabase/migrations/002_usuarios.sql (se separar)
+      refino: REFINO-003
+
+    - id: US-012
+      title: Cadastro de alunos com consentimento LGPD
+      priority: high
+      owner: '@dev'
+      size: M
+      blocks: [US-009, US-010, US-011a]
+      blocked_by: [US-004a]
+      description: |
+        Refactor AlunosModal com checkbox de consentimento + texto LGPD. Migrar
+        localStorage.sesi_alunos para tabela alunos. Audit log em CRUD.
+      acceptance_criteria:
+        - Modal com checkbox obrigatório "tenho autorização dos pais/responsáveis"
+        - Texto explicativo curto sobre LGPD
+        - Endpoint POST /api/alunos cria registro + log em acessos_dados
+        - Endpoint GET /api/alunos lista alunos do usuário
+        - PATCH /api/alunos/:id atualiza
+        - DELETE /api/alunos/:id soft delete
+        - Migração 1x: ao primeiro login, importa localStorage para Supabase
+        - Campo obs_nee criptografado (ver US-012b)
+      dod:
+        - Sheila pode cadastrar aluno em < 30s
+        - Audit log mostra cada operação
+      file_list_estimate:
+        - components/modals/AlunosModal.js
+        - pages/api/alunos/index.js
+        - pages/api/alunos/[id].js
+        - lib/db/alunos.js
+        - lib/db/migrate-local.js
+      refinos: [REFINO-011]
+
+    - id: US-012b
+      title: Criptografia de campos sensíveis (obs_nee)
+      priority: high
+      owner: '@dev'
+      size: S
+      blocks: []
+      blocked_by: [US-012]
+      description: |
+        Criptografar campo obs_nee (laudo) em repouso. Chave por usuário derivada
+        de user_id + secret env. ADR-008.
+      acceptance_criteria:
+        - lib/db/encryption.js com encrypt(text, userKey) / decrypt(cipher, userKey)
+        - Migration 003 instala extension pgcrypto (se for usar DB-level)
+        - obs_nee armazenado encrypted; visível só após decrypt
+        - Chave secret em SUPABASE_ENCRYPTION_SECRET env var
+      dod:
+        - Banco mostra obs_nee em base64/cipher
+        - App descriptografa transparente para professora dona
+      file_list_estimate:
+        - lib/db/encryption.js
+        - supabase/migrations/003_pgcrypto.sql
+      refino: REFINO-004
+      includes_adr: ADR-008
+
+# =============================================================================
+# EPIC 2 — Telas por capítulo (FASE 2 — 3-4 semanas)
+# =============================================================================
+- epic: EPIC-2
+  name: Telas por capítulo (PTD, Aula, Avaliação 6-em-1, Atividades)
+  goal: Geração de documentos pedagógicos por capítulo
+  duration: 3-4 weeks
+  blocks: [EPIC-3]
+  decision_logos:
+    docx: 03-logo-sesi.jpeg (completa FIESP/SESI/SENAI/IRS)
+    ui: 03-logo-sesi-simplificada.jpg (só barra SESI)
+    refino: REFINO-007
+
+  stories:
+    - id: US-005
+      title: Refactor Tela PTD (Tela 2)
+      priority: high
+      owner: '@dev'
+      size: L
+      blocks: [US-006]
+      blocked_by: [US-003, US-014a, US-004a]
+      description: |
+        Refazer aba "plano" → Tela PTD com 8 seções da v3. Refactor planoBuilder.js
+        + migração para docx library puro (ADR-005).
+      acceptance_criteria:
+        - pages/ptd.js criada (ou refactor pages/index.js aba plano)
+        - Form com Ano + Componente + Capítulo
+        - lib/planoBuilder.js: lista SECOES atualizada para 8 seções v3
+        - lib/exporters/word-ptd.js novo — docx library puro com cabeçalho Profª Sheila + cidade + vigência
+        - Validador integrado (US-002) checa as 8 seções
+        - Botão "Gerar aula semanal" navega para Tela 3 com dados pré-populados
+        - Logo COMPLETA aplicada (REFINO-007)
+        - Snapshot test: comparar PTD gerado pré/pós refactor
+      dod:
+        - Sheila gera PTD e .docx é igual ao template SESI oficial
+        - Validador passa nas 8 seções
+      file_list_estimate:
+        - pages/ptd.js
+        - lib/planoBuilder.js (refactor)
+        - lib/exporters/word-ptd.js (novo)
+        - components/PtdForm.js
+        - __tests__/exporters/word-ptd.test.js
+      includes_adr: ADR-005
+
+    - id: US-006
+      title: Tela Aula Diária / Semanário (NOVA — Tela 3)
+      priority: high
+      owner: '@dev'
+      size: L
+      blocks: []
+      blocked_by: [US-005]
+      description: |
+        Página nova que gera semanário baseado no PTD ativo. Form com horário
+        semanal pré-preenchido. Tabs por dia da semana.
+      acceptance_criteria:
+        - pages/aula.js criada
+        - Form: Ano + Componente + Capítulo + Horário semanal
+        - Horário semanal autopopula de cfg.horarioFixo (criado em US-013)
+        - Chama /api/generate com tipo_de_saida='aula'
+        - Output em tabs por dia (segunda, terça, quarta, sexta)
+        - Cada dia tem 8 blocos validados
+        - Export .docx da semana inteira
+      dod:
+        - Sheila gera semanário em < 90s
+        - Cada aula cabe em 50min (tempos validados)
+      file_list_estimate:
+        - pages/aula.js
+        - components/AulaTabs.js
+        - lib/exporters/word-aula.js
+
+    - id: US-007a
+      title: Sub-tela Avaliação do Capítulo
+      priority: high
+      owner: '@dev'
+      size: M
+      blocks: []
+      blocked_by: [US-005]
+      description: |
+        Sub-rota da Tela 4. Gera 10 questões (7 obj + 3 diss) com gabarito + nível
+        por questão. Modo conservador se sem catálogo descritores.
+      acceptance_criteria:
+        - pages/avaliacao/capitulo.js
+        - Form Ano + Componente + Capítulo
+        - Mix automático 7+3
+        - Gabarito com nível por questão (e descritor se catálogo disponível)
+        - Export .docx fiel ao template CE-228
+        - Modo conservador omite descritores quando ausentes
+      dod:
+        - Sheila gera prova válida da coordenação
+      file_list_estimate:
+        - pages/avaliacao/capitulo.js
+        - lib/exporters/word-prova.js (refactor docBuilder.js para docx puro)
+      refino: REFINO-005
+
+    - id: US-007b
+      title: Sub-tela Simulado AVALIA + Cartão-resposta
+      priority: high
+      owner: '@dev'
+      size: M
+      blocks: []
+      blocked_by: [US-005]
+      description: |
+        24 questões 100% MC + cartão-resposta separado + gabarito (resposta +
+        descritor + nível). Modo conservador se sem catálogo.
+      acceptance_criteria:
+        - pages/avaliacao/simulado.js
+        - 24 questões A/B/C/D
+        - Cartão-resposta como segunda página/arquivo
+        - Gabarito 3 colunas: alternativa + descritor + nível
+        - Distribuição equilibrada N1-N4
+      dod:
+        - Cartão-resposta utilizável em sala (preenchível)
+        - Gabarito completo
+      file_list_estimate:
+        - pages/avaliacao/simulado.js
+        - lib/exporters/cartao-resposta.js
+      refino: REFINO-005
+      blocked_by_asset: cartao_resposta_modelo (asset #5 pendente — pode usar layout default)
+
+    - id: US-007c
+      title: Sub-tela Rubrica
+      priority: medium
+      owner: '@dev'
+      size: S
+      blocks: []
+      blocked_by: [US-005]
+      description: Gerar tabela Critérios × N1-N4 para qualquer atividade.
+      acceptance_criteria:
+        - pages/avaliacao/rubrica.js
+        - Form Ano + Componente + Capítulo
+        - Output tabela 4 colunas (N1, N2, N3, N4) por critério
+        - Pelo menos 3-5 critérios sugeridos
+      dod:
+        - Tabela exportada em .docx
+      file_list_estimate:
+        - pages/avaliacao/rubrica.js
+      refino: REFINO-005
+
+    - id: US-007d
+      title: Sub-tela Pauta de Observação
+      priority: medium
+      owner: '@dev'
+      size: S
+      blocks: []
+      blocked_by: [US-005, US-012]
+      description: |
+        Planilha estruturada por aluno (Nome / Habilidade / Nível / Observação).
+        Auto-popular com alunos da turma.
+      acceptance_criteria:
+        - pages/avaliacao/pauta-observacao.js
+        - Lista alunos da turma cadastrada
+        - 1 linha por aluno
+        - Campos: habilidade observada (input), nível (select N1-N4), observação (textarea)
+        - Export .docx em formato planilha
+      dod:
+        - Sheila preenche em sala em ≤ 5min
+      file_list_estimate:
+        - pages/avaliacao/pauta-observacao.js
+      refino: REFINO-005
+
+    - id: US-007e
+      title: Sub-tela Plenária
+      priority: medium
+      owner: '@dev'
+      size: S
+      blocks: []
+      blocked_by: [US-005]
+      description: Roteiro de discussão coletiva — perguntas reflexivas do conteúdo.
+      acceptance_criteria:
+        - pages/avaliacao/plenaria.js
+        - Form simples
+        - Output ≥ 5 perguntas reflexivas + espaço de registro
+      dod:
+        - Aplicável em sala em 15min
+      file_list_estimate:
+        - pages/avaliacao/plenaria.js
+      refino: REFINO-005
+
+    - id: US-007f
+      title: Sub-tela Pauta de Leitura (2 eixos combináveis)
+      priority: medium
+      owner: '@dev'
+      size: M
+      blocks: []
+      blocked_by: [US-005, US-012]
+      description: |
+        Planilha por aluno com 2 eixos: Fase de Leitura (Decodificação / Fluência /
+        Fluente) × Compreensão (Com / Sem). Aplica padrão a LP; revisar Mat.
+      acceptance_criteria:
+        - pages/avaliacao/pauta-leitura.js
+        - Lista alunos da turma
+        - 2 dropdowns por aluno (fase + compreensão)
+        - Termos exatos do PROMPT 2 v4
+        - Default: aplica só a LP (TBD-006 confirmado por padrão)
+        - Export .docx
+      dod:
+        - Output não usa termos genéricos (validador)
+      file_list_estimate:
+        - pages/avaliacao/pauta-leitura.js
+      refinos: [REFINO-005, REFINO-012]
+      tbd_assumed: TBD-005 (2 eixos), TBD-006 (só LP)
+
+    - id: US-008
+      title: Tela Atividades — refactor (1 principal + sob demanda)
+      priority: medium
+      owner: '@dev'
+      size: M
+      blocks: []
+      blocked_by: [US-003]
+      description: |
+        Refatorar aba "atividade" para gerar 1 atividade principal + botão "Gerar
+        nova" com seletor de variante (nível N1-N4 / aluno / outro foco).
+      acceptance_criteria:
+        - pages/atividade.js refatorada
+        - Schema 4 itens: Objetivo + Habilidade + Enunciado + Contexto
+        - Botão "Gerar nova" abre seletor de variante
+        - Cada variante chama /api/generate com instrução adicional
+      dod:
+        - 1 atividade principal gerada em ≤ 30s
+        - Variantes parametrizadas funcionam
+      file_list_estimate:
+        - pages/atividade.js
+        - components/AtividadeForm.js
+
+# =============================================================================
+# EPIC 3 — Telas por aluno (FASE 3 — 3-4 semanas)
+# =============================================================================
+- epic: EPIC-3
+  name: Telas por aluno (Observação, Relatório, Painel N1-N4)
+  goal: Funcionalidades dependentes de histórico longitudinal por aluno
+  duration: 3-4 weeks
+  blocks: [EPIC-4]
+
+  stories:
+    - id: US-009
+      title: Tela Observações (NOVA — Tela 6)
+      priority: high
+      owner: '@dev'
+      size: L
+      blocks: [US-010]
+      blocked_by: [US-012]
+      description: |
+        Página nova de geração de observações pedagógicas formais a partir de
+        evidências rápidas. Persiste em avaliacoes (com nível inferido se aplicável).
+        Botão de follow-up gera atividade adaptada.
+      acceptance_criteria:
+        - pages/observacao.js
+        - Form: Aluno (select com busca) + Descrição rápida (textarea)
+        - Output: 4 eixos (Desempenho/Dificuldade/Estratégia/Resposta) + final fixo
+        - Pergunta interativa final: "Deseja sugestão de atividade...?"
+        - Botão "Gerar atividade pra ajudar este aluno" → /atividade?aluno_id=X
+        - Persistência em avaliacoes (fonte='manual')
+        - Validador rejeita termos proibidos
+      dod:
+        - Sheila gera observação em ≤ 30s
+        - Texto sem julgamentos validado
+      file_list_estimate:
+        - pages/observacao.js
+        - components/ObservacaoForm.js
+        - lib/db/avaliacoes.js
+        - pages/api/avaliacoes/index.js
+
+    - id: US-010
+      title: Tela Relatório de Etapa (NOVA — Tela 7)
+      priority: high
+      owner: '@dev'
+      size: L
+      blocks: []
+      blocked_by: [US-009]
+      description: |
+        Geração de relatório de 1 página por aluno por etapa. Auto-popular
+        Informações com histórico longitudinal (queries em avaliacoes).
+      acceptance_criteria:
+        - pages/relatorio.js
+        - Form: Aluno + Etapa (auto-detectado) + Informações (autopopula com histórico)
+        - Output 1 página, terceira pessoa, 4 eixos + final positivo + assinatura
+        - Validador checa: limite de palavras, terceira pessoa (regex), 4 eixos, ausência termos negativos
+        - Export .docx
+      dod:
+        - Output cabe em 1 página A4
+        - Terceira pessoa validada
+      file_list_estimate:
+        - pages/relatorio.js
+        - lib/exporters/word-relatorio.js
+      blocked_by_asset: modelo_relatorio_final (asset #6 pendente — usar template padrão)
+
+    - id: US-011a
+      title: Tela Painel N1-N4 — visualização
+      priority: high
+      owner: '@dev'
+      size: M
+      blocks: [US-011b]
+      blocked_by: [US-012]
+      description: |
+        UI do Painel — tabela com filtros, cores e modal por aluno. Sem geração
+        automática inicialmente — popula com dados manuais de avaliacoes.
+      acceptance_criteria:
+        - pages/painel.js
+        - Filtros: turma + componente
+        - Tabela 4 colunas: Nome / Nível (cor) / Observação / Intervenção
+        - Cores N1-N4 (modo padrão); toggle para modo semáforo
+        - Linha clicável → modal com histórico longitudinal
+        - Botão "Gerar atividade adaptada" no modal
+      dod:
+        - Painel mostra dados de avaliacoes corretamente
+        - Toggle de cores persiste em cfg
+      file_list_estimate:
+        - pages/painel.js
+        - components/PainelTabela.js
+        - components/AlunoModal.js
+
+    - id: US-011b
+      title: Pipeline JSON estruturado para Painel (PROMPT 8)
+      priority: high
+      owner: '@dev'
+      size: M
+      blocks: []
+      blocked_by: [US-011a]
+      description: |
+        Endpoint /api/painel/classificar usa PROMPT 8 v3 com Anthropic tools/
+        function calling para forçar JSON estruturado. Validador Zod.
+      acceptance_criteria:
+        - lib/llm/classifier.js implementa pipeline JSON estruturado
+        - Anthropic tools spec definida
+        - Zod schema valida output (Aluno[] com nivel, observacao, intervencao)
+        - Intervenção sempre do catálogo (Feature 01 parte C) — validador rejeita inventadas
+        - Endpoint POST /api/painel/classificar grava em avaliacoes (fonte='classificador_llm')
+      dod:
+        - Output JSON 100% válido em snapshot
+        - Erro de classificação não invalida o painel inteiro
+      file_list_estimate:
+        - lib/llm/classifier.js
+        - pages/api/painel/classificar.js
+        - lib/validators/painel.js (Zod schema)
+      refino: REFINO-002
+
+# =============================================================================
+# EPIC 4 — Polimento (FASE 4 — 1 semana)
+# =============================================================================
+- epic: EPIC-4
+  name: Polimento — Configurações, Upload de assets, Admin, LGPD
+  goal: Recursos de configuração e governança para produção
+  duration: 1 week
+
+  stories:
+    - id: US-013
+      title: Tela de Configurações + Upload de assets
+      priority: medium
+      owner: '@dev'
+      size: L
+      blocks: []
+      blocked_by: []
+      description: |
+        Página /config com perfil da professora, upload de assets institucionais,
+        toggle de cores, horário semanal padrão. Persiste em usuarios.preferencias
+        (JSONB) + Supabase Storage.
+      acceptance_criteria:
+        - pages/config.js
+        - Perfil: nome, cidade, escola
+        - Horário semanal padrão (Aula Diária autopopula)
+        - Upload de catálogo descritores → user-assets bucket + parser para JSON
+        - Upload de logo, brasão, template Word custom
+        - Toggle "Modo cores: Padrão | Semáforo"
+        - LGPD: botões "Exportar meus dados" + "Excluir conta"
+      dod:
+        - Upload funcional para todos os 6 assets
+        - Configurações persistem entre sessões
+      file_list_estimate:
+        - pages/config.js
+        - components/AssetUpload.js
+        - pages/api/assets/upload.js
+        - pages/api/me/export.js
+        - pages/api/me/delete.js
+        - lib/parsers/descritores.js (PDF/CSV → JSON)
+
+    - id: US-014b
+      title: Modo conservador completo (com upload)
+      priority: medium
+      owner: '@dev'
+      size: S
+      blocks: []
+      blocked_by: [US-013]
+      description: |
+        Estender US-014a com integração ao US-013. App detecta uploads e
+        atualiza modo conservador dinamicamente.
+      acceptance_criteria:
+        - Quando usuária faz upload de catálogo descritores, app detecta e remove
+          banner correspondente
+        - Quando upload é deletado, banner reaparece
+        - Geração subsequente respeita estado atual dos assets
+      dod:
+        - Sheila pode subir descritores e gerar prova com descritores na sequência
+      file_list_estimate:
+        - lib/assets/registry.js (refactor para reagir a uploads)
+      refino: REFINO-001 (parte b)
+
+    - id: US-015
+      title: Endpoint admin de monitoramento de custo
+      priority: low
+      owner: '@dev'
+      size: S
+      blocks: []
+      blocked_by: [US-003]
+      description: |
+        Endpoint /api/admin/custo-mensal agrega custo_estimado de planejamentos
+        do mês. Retorna JSON. Usado por Sidney para monitorar margem.
+      acceptance_criteria:
+        - GET /api/admin/custo-mensal retorna { mes, total_usd, por_usuario, por_tipo }
+        - Acesso restrito (header secret ou role admin)
+      dod:
+        - Sidney consulta endpoint e vê custo do mês
+      file_list_estimate:
+        - pages/api/admin/custo-mensal.js
+      refino: REFINO-009
+
+    - id: US-016
+      title: Cache strategy detalhada
+      priority: low
+      owner: '@dev'
+      size: S
+      blocks: []
+      blocked_by: [US-001]
+      description: |
+        Otimizar Anthropic Prompt Caching com strategy explícita. Métrica de
+        cache hit rate.
+      acceptance_criteria:
+        - Cache_control aplicado a system prompts (já em US-001)
+        - Métrica cache_hit_rate logada em planejamentos.metadata
+        - Análise mensal disponível via US-015
+      dod:
+        - Cache hit rate ≥ 80% em uso típico
+      file_list_estimate:
+        - lib/llm/pipeline.js (refinement)
+      refino: REFINO-010
+
+# =============================================================================
+# DEPENDÊNCIAS CRÍTICAS (resumo visual)
+# =============================================================================
+critical_path:
+  - US-000 → US-001 → US-002 → US-003 → US-014a (FASE 0)
+  - → US-004 → US-004a → US-012 → US-012b (FASE 1)
+  - → US-005 → US-006 (FASE 2 PTD/Aula)
+  - → US-005 → US-007a..f (FASE 2 Avaliação 6-em-1, paralelizáveis)
+  - → US-005 → US-008 (FASE 2 Atividade)
+  - → US-012 → US-009 → US-010 (FASE 3 Por aluno texto)
+  - → US-012 → US-011a → US-011b (FASE 3 Painel)
+  - → US-013 → US-014b → US-015 → US-016 (FASE 4 Polimento)
+
+# =============================================================================
+# SPRINT PLANNING SUGERIDO (sprints de 1 semana)
+# =============================================================================
+sprints:
+  - num: 1
+    week: 1
+    focus: Bedrock — base
+    stories: [US-000, US-001, US-002]
+    deliverable: PROMPT MESTRE rodando + validador determinístico operacional
+
+  - num: 2
+    week: 2
+    focus: Bedrock — pipeline + DB
+    stories: [US-003, US-014a, US-004]
+    deliverable: Pipeline G+C funcionando + Supabase com schema
+
+  - num: 3
+    week: 3
+    focus: Auth + Alunos
+    stories: [US-004a, US-012, US-012b]
+    deliverable: Login Google integrado + Cadastro de alunos LGPD
+
+  - num: 4
+    week: 4
+    focus: PTD
+    stories: [US-005]
+    deliverable: PTD funcional com export .docx fiel ao template
+
+  - num: 5
+    week: 5
+    focus: Aula Diária + Atividades
+    stories: [US-006, US-008]
+    deliverable: Semanário e Atividades operacionais
+
+  - num: 6-7
+    weeks: 6-7
+    focus: Avaliação 6-em-1 (paralelizável)
+    stories: [US-007a, US-007b, US-007c, US-007d, US-007e, US-007f]
+    deliverable: Tela Avaliação completa com 6 sub-botões
+
+  - num: 8
+    week: 8
+    focus: Observações
+    stories: [US-009]
+    deliverable: Tela Observações + integração com Atividades
+
+  - num: 9
+    week: 9
+    focus: Relatório
+    stories: [US-010]
+    deliverable: Relatório de etapa funcional
+
+  - num: 10
+    week: 10
+    focus: Painel
+    stories: [US-011a, US-011b]
+    deliverable: Painel N1-N4 com classificador automático
+
+  - num: 11
+    week: 11
+    focus: Polimento
+    stories: [US-013, US-014b, US-015, US-016]
+    deliverable: Configurações + Upload assets + Admin + Cache otimizado
+
+  - num: 12
+    week: 12
+    focus: Validação alpha + bug fixes
+    stories: [feedback Sheila, polimento UX]
+    deliverable: MVP estável
+
+# =============================================================================
+# DEFINITION OF DONE GLOBAL (DoD)
+# =============================================================================
+dod_global:
+  - Todas as stories completadas com AC
+  - Testes unitários passando (npm test)
+  - Validador determinístico passa em smoke tests por tipo
+  - PROMPT MESTRE em produção
+  - Pipeline G+C com retry funcional
+  - Supabase migrations aplicadas em ambiente de desenvolvimento
+  - LGPD: termo de consentimento ativo, audit log, export, delete
+  - Custo médio ≤ $0.05/geração com prompt caching
+  - 7 telas funcionais (PTD, Aula, Avaliação 6-em-1, Atividades, Observações, Relatório, Painel)
+  - Sheila valida em ambiente de desenvolvimento por 1 semana sem bloqueador
+  - 4 dos 6 assets institucionais incorporados (modo conservador para os pendentes)
+  - Documentação atualizada (README, docs/specs, docs/stories)
+
+# =============================================================================
+# OBSERVAÇÕES IMPORTANTES
+# =============================================================================
+observacoes:
+  - "Owner '@dev' é Sidney (full stack). @qa, @architect, @data-engineer são personas
+     que ele alterna conforme tarefa. Não é equipe."
+  - "Sprints podem comprimir/expandir conforme dedicação real do Sidney."
+  - "Validação alpha em PARALELO ao desenvolvimento (não em série) — Sheila usa cada
+     feature por 1 semana após entrega. Risco RISCO-009."
+  - "Stories podem ser convertidas em arquivos individuais em docs/stories/{epic}.{story}.story.md
+     conforme @sm cria — recomendo criar quando começar a implementar (sob demanda)."
+  - "Branches: feature/US-XXX-slug-curto — exemplo: feature/US-005-tela-ptd"
+  - "PRs: 1 por story; review opcional em pares; @qa valida AC antes de merge."
+  - "Cada PR atualiza este implementation.yaml marcando story como completed."
