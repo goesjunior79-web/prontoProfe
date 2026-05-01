@@ -3,6 +3,30 @@
 > Registro de mudanças nos prompts canônicos do SESI Edu.
 > **Princípio:** prompts são imutáveis após release. Nova versão = novo VERSION.
 
+## 2026-05-01 — `validador-2026-05-01` (v1.0.0)
+
+**Story:** US-003 (FASE 0 Bedrock)
+**Arquivo:** `lib/prompts/validator.js`
+
+PROMPT 6 v2 — Validador / Corretor LLM. Roda DEPOIS do generator (PROMPT MESTRE)
+no pipeline Generator + Critic (ADR-002).
+
+### Conteúdo
+4 critérios de validação consolidados:
+1. Estrutura correta?
+2. Nada inventado?
+3. Linguagem pedagógica?
+4. Aplicável? ← exclusivamente LLM (determinístico não consegue)
+
+### Origem
+[`docs/prompts-esposa/app-prompts/06-corretor.md`](../../docs/prompts-esposa/app-prompts/06-corretor.md) (v2 Final)
+
+### Comportamento
+- Recebe v1 do generator como input
+- Corrige automaticamente se houver erro
+- NÃO explica nem comenta — entrega só a versão final
+
+
 ## 2026-05-01 — `master-2026-05-01` (v1.0.0)
 
 **Story:** US-001 (FASE 0 Bedrock)

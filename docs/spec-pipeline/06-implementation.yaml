@@ -104,6 +104,10 @@ project:
       priority: critical
       owner: '@dev'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      commit: ad0f8e8
+      branch: feature/US-002-validators (merged em master)
       blocks: [US-003]
       blocked_by: [US-000]
       description: |

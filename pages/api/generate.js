@@ -3,11 +3,11 @@ import { authOptions } from './auth/[...nextauth]';
 import Anthropic from '@anthropic-ai/sdk';
 import { getOrCreateProfile, incrementUsage } from '../../lib/db/profile';
 import { saveGeneration } from '../../lib/db/history';
-import { PROMPT_MESTRE, VERSION as PROMPT_VERSION, isTipoDeSaidaValido } from '../../lib/prompts/master';
+import { isTipoDeSaidaValido } from '../../lib/prompts/master';
+import { runPipeline } from '../../lib/llm/pipeline';
 
 const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
-const TEMPERATURE = 0.3;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
@@ -49,26 +49,20 @@ export default async function handler(req, res) {
     });
   }
 
-  // ── Geração ───────────────────────────────────────────────────────────────
+  // ── Geração via pipeline Generator + Critic (ADR-002) ─────────────────────
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await client.messages.create({
+    const userMessage = buildAnthropicMessages(prompt, tipo_de_saida, files);
+
+    const pipelineResult = await runPipeline({
+      client,
       model: CLAUDE_MODEL,
-      max_tokens: 8000,
-      temperature: TEMPERATURE,
-      // PROMPT MESTRE com Anthropic Prompt Caching (ADR-002).
-      // O system prompt é cacheado por 5min — chamadas subsequentes pagam ~10%
-      // do custo de input dos tokens cacheados.
-      system: [
-        {
-          type: 'text',
-          text: PROMPT_MESTRE,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: buildAnthropicMessages(prompt, tipo_de_saida, files),
+      userMessage,
+      tipoDeSaida: tipo_de_saida,
+      maxRetries: 3,
     });
-    const result = response.content[0]?.text || '';
+
+    const result = pipelineResult.content;
 
     // ── Salvar no banco ───────────────────────────────────────────────────────
     await incrementUsage(session.user.email);
@@ -86,7 +80,11 @@ export default async function handler(req, res) {
       result,
       model:           CLAUDE_MODEL,
       tipo_de_saida:   tipo_de_saida || null,
-      prompt_versao:   `master-${PROMPT_VERSION}`,
+      prompt_versao:   pipelineResult.promptVersao,
+      pipeline_passed: pipelineResult.passed,
+      pipeline_attempts: pipelineResult.attempts,
+      custo_estimado:  pipelineResult.custoEstimado,
+      warnings:        pipelineResult.warnings || [],
       usage:           profile.usage + 1,
       plan,
     });
