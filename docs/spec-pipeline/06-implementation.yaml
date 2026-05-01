@@ -576,6 +576,9 @@ project:
       priority: high
       owner: '@dev'
       size: L
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-009-010-por-aluno
       blocks: [US-010]
       blocked_by: [US-012]
       description: |
@@ -604,6 +607,9 @@ project:
       priority: high
       owner: '@dev'
       size: L
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-009-010-por-aluno
       blocks: []
       blocked_by: [US-009]
       description: |
