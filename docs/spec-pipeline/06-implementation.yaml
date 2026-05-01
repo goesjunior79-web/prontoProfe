@@ -209,6 +209,9 @@ project:
       priority: critical
       owner: '@data-engineer'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-004-schema-supabase
       blocks: [US-004a, US-012]
       blocked_by: [US-014a]
       description: |
