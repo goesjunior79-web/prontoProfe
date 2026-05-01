@@ -239,6 +239,9 @@ project:
       priority: critical
       owner: '@dev'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-004a-nextauth-supabase
       blocks: [US-012, todas operações por user_id]
       blocked_by: [US-004]
       description: |
