@@ -374,6 +374,9 @@ project:
       priority: high
       owner: '@dev'
       size: L
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-006-aula-semanario
       blocks: []
       blocked_by: [US-005]
       description: |
