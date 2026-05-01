@@ -541,6 +541,9 @@ project:
       priority: medium
       owner: '@dev'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-008-atividades
       blocks: []
       blocked_by: [US-003]
       description: |
