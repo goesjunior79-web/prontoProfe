@@ -341,6 +341,9 @@ project:
       priority: high
       owner: '@dev'
       size: L
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-005-tela-ptd
       blocks: [US-006]
       blocked_by: [US-003, US-014a, US-004a]
       description: |
