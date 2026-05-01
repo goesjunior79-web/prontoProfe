@@ -12,7 +12,7 @@ const inp = {
 const sel = { ...inp };
 
 function initAluno() {
-  return { nome: '', turma: 'A', serie: '', disciplina: '', obs: '' };
+  return { nome: '', turma: 'A', serie: '', disciplina: '', obs: '', consentido: false };
 }
 
 export default function AlunosModal({ onClose }) {
@@ -37,12 +37,18 @@ export default function AlunosModal({ onClose }) {
 
   const addOrEdit = () => {
     if (!form.nome.trim()) return;
+    // LGPD: novo cadastro exige consentimento explícito (US-012).
+    // Edições não exigem (consent já dado anteriormente).
+    if (editIdx === null && !form.consentido) {
+      alert('Confirme que tem autorização dos pais/responsáveis (LGPD).');
+      return;
+    }
     let nova;
     if (editIdx !== null) {
       nova = alunos.map((a, i) => i === editIdx ? { ...form } : a);
       setEditIdx(null);
     } else {
-      nova = [...alunos, { ...form }];
+      nova = [...alunos, { ...form, consent_at: new Date().toISOString() }];
     }
     save(nova);
     setForm(initAluno());
@@ -207,14 +213,34 @@ export default function AlunosModal({ onClose }) {
                 <input style={inp} placeholder="Ex: TDAH, dislexia, deficiência visual, aluno laudado..." value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} />
               </div>
 
+              {/* Checkbox de consentimento LGPD — obrigatório em novos cadastros (US-012) */}
+              {editIdx === null && (
+                <div style={{ background: '#FEF3C7', border: '0.5px solid #FCD34D', borderRadius: 7, padding: '9px 11px', marginTop: 4 }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: 12, color: '#78350F' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!form.consentido}
+                      onChange={e => setForm(f => ({ ...f, consentido: e.target.checked }))}
+                      style={{ marginTop: 2, accentColor: '#92400E' }}
+                    />
+                    <span>
+                      <b>Confirmo que tenho autorização dos pais/responsáveis</b> para
+                      registrar dados pedagógicos deste aluno (incluindo eventuais
+                      observações sobre necessidades educacionais especiais), conforme a
+                      <b> LGPD (Lei 13.709/2018)</b>. Os dados ficam acessíveis apenas a mim.
+                    </span>
+                  </label>
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                 <button onClick={cancelEdit} style={{ flex: 1, padding: 9, borderRadius: 8, border: '0.5px solid #D3D1C7', background: '#F7F6F3', fontSize: 13, cursor: 'pointer', color: '#555' }}>
                   Cancelar
                 </button>
                 <button
                   onClick={addOrEdit}
-                  disabled={!form.nome.trim()}
-                  style={{ flex: 2, padding: 9, borderRadius: 8, border: 'none', background: form.nome.trim() ? '#003DA5' : '#B4B2A9', color: '#fff', fontSize: 13, fontWeight: 600, cursor: form.nome.trim() ? 'pointer' : 'default' }}>
+                  disabled={!form.nome.trim() || (editIdx === null && !form.consentido)}
+                  style={{ flex: 2, padding: 9, borderRadius: 8, border: 'none', background: (form.nome.trim() && (editIdx !== null || form.consentido)) ? '#003DA5' : '#B4B2A9', color: '#fff', fontSize: 13, fontWeight: 600, cursor: (form.nome.trim() && (editIdx !== null || form.consentido)) ? 'pointer' : 'default' }}>
                   {editIdx !== null ? 'Salvar alterações' : 'Cadastrar aluno'}
                 </button>
               </div>

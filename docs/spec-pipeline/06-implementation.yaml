@@ -267,6 +267,9 @@ project:
       priority: high
       owner: '@dev'
       size: M
+      status: completed
+      completed_at: 2026-05-01
+      branch: feature/US-012-alunos-lgpd
       blocks: [US-009, US-010, US-011a]
       blocked_by: [US-004a]
       description: |
