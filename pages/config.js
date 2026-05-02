@@ -10,7 +10,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import LoginGate from '../components/LoginGate';
-import { ASSET_DEFINITIONS } from '../lib/assets/registry';
+import { ASSET_DEFINITIONS } from '../lib/assets/definitions';
 
 export default function ConfigPage() {
   const { data: session, status } = useSession();
