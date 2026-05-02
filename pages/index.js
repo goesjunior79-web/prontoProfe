@@ -202,27 +202,31 @@ export default function Home() {
     setModeloLoading(true);
     const ext = file.name.split('.').pop().toLowerCase();
     const type = ext === 'pdf' ? 'pdf' : ['doc', 'docx'].includes(ext) ? 'word' : ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? 'img' : 'txt';
-    // Limite conservador (Vercel cap = 4.5 MB no body; texto extraído + restante do prompt cabem com folga até ~5 MB de PDF)
-    const MAX_FILE_BYTES = 5_000_000;
+    // Texto extraído é truncado se passar do MAX_PROMPT do server (120k).
+    // PDFs/Word extraem TEXTO no navegador, então arquivo original pode ser
+    // grande (50 MB de PDF vira ~100 KB de texto). Sem trava de tamanho de
+    // arquivo aqui — só pra imagem (essa vai como base64 pro server).
     const MAX_TEXT_CHARS = 80_000;
-    if (file.size > MAX_FILE_BYTES) {
-      setErrorMsg(`Arquivo de ${(file.size / 1_000_000).toFixed(1)} MB é grande demais. Limite: 5 MB. Tente: 1) selecionar páginas específicas, 2) usar Word em vez de PDF.`);
-      setModeloLoading(false);
-      return;
-    }
+    const MAX_IMG_BYTES = 4_000_000; // imagem vai inteira no body — limite real
     try {
       if (type === 'pdf') {
         const { extractFromPdf } = await import('../lib/loaders/fileExtractors');
         const { texto } = await extractFromPdf(file);
         const truncado = texto.length > MAX_TEXT_CHARS;
         setModelo({ name: file.name, text: truncado ? texto.slice(0, MAX_TEXT_CHARS) : texto, type: 'pdf', truncado });
-        if (truncado) setErrorMsg(`Modelo carregado, mas texto foi truncado (eram ${texto.length.toLocaleString('pt-BR')} chars; limite ${MAX_TEXT_CHARS.toLocaleString('pt-BR')}). A IA verá apenas o início.`);
+        if (truncado) setErrorMsg(`Texto do modelo é muito longo (${texto.length.toLocaleString('pt-BR')} chars). A IA verá os primeiros ${MAX_TEXT_CHARS.toLocaleString('pt-BR')}.`);
       } else if (type === 'word') {
         const { extractFromDocx } = await import('../lib/loaders/fileExtractors');
         const text = await extractFromDocx(file);
         const truncado = text.length > MAX_TEXT_CHARS;
         setModelo({ name: file.name, text: truncado ? text.slice(0, MAX_TEXT_CHARS) : text, type: 'word', truncado });
+        if (truncado) setErrorMsg(`Texto do modelo é muito longo. A IA verá os primeiros ${MAX_TEXT_CHARS.toLocaleString('pt-BR')} caracteres.`);
       } else if (type === 'img') {
+        if (file.size > MAX_IMG_BYTES) {
+          setErrorMsg(`Imagem de ${(file.size / 1_000_000).toFixed(1)} MB é grande demais (limite 4 MB). Reduza ou tire foto em qualidade menor.`);
+          setModeloLoading(false);
+          return;
+        }
         const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result.split(',')[1]); r.readAsDataURL(file); });
         setModelo({ name: file.name, imgB64: b64, imgType: file.type, type: 'img' });
       } else {
@@ -387,7 +391,7 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
       if (msg.startsWith('anexo_muito_grande')) {
         const sz = msg.split(':')[1];
         const ext = sz === 'server' ? '' : ` (~${sz} MB)`;
-        setErrorMsg(`O material anexado é grande demais${ext}. Limite: 4 MB. Tente: 1) selecionar só o capítulo no PDF, 2) usar Word em vez de PDF, 3) digitar o conteúdo direto no campo de texto.`);
+        setErrorMsg(`O material anexado é grande demais${ext}. Para PDFs maiores, vá em ⚙️ Configurações → "Meus modelos" e use o upload direto (até 10 MB). Outras opções: 1) Selecionar só o capítulo, 2) Usar Word em vez de PDF.`);
       } else if (msg === 'servidor_demorou' || msg.includes('timeout') || msg.includes('504')) {
         setErrorMsg('A geração demorou demais. Tente: 1) enviar menos páginas do livro, 2) reduzir o texto de conteúdo, 3) tentar novamente.');
       } else if (msg === 'servidor_indisponivel') {
