@@ -114,6 +114,13 @@ export default async function handler(req, res) {
   }
 }
 
+/**
+ * Monta o array de "parts" do user message no formato Anthropic.
+ * `runPipeline` envolve em { role: 'user', content: parts } depois.
+ *
+ * Cada part precisa ter `type` (text|image|document) — Anthropic rejeita 400
+ * com "messages.0.content.0.type: Field required" se faltar.
+ */
 function buildAnthropicMessages(prompt, tipoDeSaida, files) {
   const parts = [];
   files.forEach(f => {
@@ -127,7 +134,7 @@ function buildAnthropicMessages(prompt, tipoDeSaida, files) {
     ? `Tipo de saída: ${tipoDeSaida}\n\n${prompt}`
     : prompt;
   parts.push({ type: 'text', text: promptFinal });
-  return [{ role: 'user', content: parts }];
+  return parts;
 }
 
 
