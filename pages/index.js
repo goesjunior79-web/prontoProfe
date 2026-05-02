@@ -387,10 +387,28 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
       if (data.error === 'auth_required')  { setErrorMsg('Você foi desconectada. Recarregue a página e entre novamente.'); setLoading(false); return; }
       if (data.error === 'upgrade_required' || data.error === 'limit_reached') { setShowUpgrade(true); setLoading(false); return; }
       if (!res.ok) {
+        // Casos comuns com cópia explícita do server (saldo, rate limit, timeout, etc.)
+        if (res.status === 402 || /saldo|crédito|credit/i.test(data.message || '')) {
+          setErrorMsg(data.message || 'Saldo da IA esgotado. Avise o administrador.');
+          setLoading(false);
+          return;
+        }
+        if (res.status === 429 || /limite|rate.limit/i.test(data.message || '')) {
+          setErrorMsg(data.message || 'Limite de requisições atingido. Aguarde alguns minutos.');
+          setLoading(false);
+          return;
+        }
+        if (res.status === 504) throw new Error('servidor_demorou');
         const detail = data.detail || '';
         const isServerNet = detail.includes('fetch') || detail.includes('network') || detail.includes('ENOTFOUND') || detail.includes('ECONNREFUSED');
         if (isServerNet) throw new Error('servidor_sem_conexao');
-        throw new Error(detail || data.message || 'Erro na geração');
+        // Mensagem amigável do server (PT-BR) é mostrada direto.
+        if (data.message) {
+          setErrorMsg(data.message);
+          setLoading(false);
+          return;
+        }
+        throw new Error('Erro na geração');
       }
       const gerado = stripMarkdown(data.result);
       setResult(gerado);
