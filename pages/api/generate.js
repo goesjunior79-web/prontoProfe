@@ -140,7 +140,10 @@ export default async function handler(req, res) {
     const msg = error.message || '';
     let statusCode = 500;
     let userMessage = 'Erro ao gerar conteúdo. Tente novamente.';
-    if (/api.?key|apikey|unauthorized|invalid_api/i.test(msg)) {
+    if (/credit balance.*low|insufficient credit|no credit/i.test(msg)) {
+      statusCode = 402;
+      userMessage = 'Saldo da IA esgotado. Avise o administrador (Sidney) para recarregar créditos da Anthropic.';
+    } else if (/api.?key|apikey|unauthorized|invalid_api/i.test(msg)) {
       userMessage = 'Chave de API inválida ou não configurada no servidor.';
     } else if (/quota|rate.?limit|429|too many/i.test(msg) || error.status === 429) {
       statusCode = 429;

@@ -167,6 +167,12 @@ export default async function handler(req, res) {
     });
   } catch (e) {
     console.error('POST /api/painel/classificar:', e.message);
+    if (/credit balance.*low|insufficient credit|no credit/i.test(e.message || '')) {
+      return res.status(402).json({
+        error: 'no_credits',
+        message: 'Saldo da IA esgotado. Avise o administrador para recarregar créditos da Anthropic.',
+      });
+    }
     return res.status(500).json({ error: 'classifier_error', message: safeErrorMessage(e) });
   }
 }
