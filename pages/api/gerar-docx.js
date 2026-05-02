@@ -20,6 +20,11 @@ function xmlVazio(){return '<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w
 
 export default async function handler(req,res){
   if(req.method!=='POST') return res.status(405).end();
+  // Auth (Fase 3.1) — endpoint era público, agora exige sessão.
+  const { getServerSession } = await import('next-auth/next');
+  const { authOptions } = await import('./auth/[...nextauth]');
+  const session = await getServerSession(req, res, authOptions);
+  if (!session?.user?.email) return res.status(401).json({ error: 'auth_required' });
   try{
     const PizZip=(await import('pizzip')).default;
     const{conteudo,cfg,dadosProva}=req.body;
