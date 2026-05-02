@@ -176,7 +176,17 @@ export default function Home() {
     try {
       const { extractFromPdf } = await import('../lib/loaders/fileExtractors');
       const { texto, totalPages, from, to } = await extractFromPdf(f.rawFile, { from: range.from, to: range.to });
-      updateFile(idx, { status: 'ok', text: texto, note: `Páginas ${from}–${to} de ${totalPages}` });
+      // Trunca pra caber no MAX_PROMPT do server e evitar timeout do pipeline.
+      const MAX_TEXT_CHARS = 150_000;
+      const truncado = texto.length > MAX_TEXT_CHARS;
+      const textoFinal = truncado ? texto.slice(0, MAX_TEXT_CHARS) : texto;
+      const note = truncado
+        ? `Páginas ${from}–${to} (${(textoFinal.length / 1000).toFixed(0)}k chars de ${(texto.length / 1000).toFixed(0)}k — texto cortado)`
+        : `Páginas ${from}–${to} de ${totalPages}`;
+      updateFile(idx, { status: 'ok', text: textoFinal, note, truncado });
+      if (truncado) {
+        setErrorMsg(`Material muito extenso (${(texto.length / 1000).toFixed(0)} mil caracteres). A IA verá os primeiros ${(MAX_TEXT_CHARS / 1000).toFixed(0)} mil. Para resultado mais preciso, escolha menos páginas.`);
+      }
     } catch (e) { updateFile(idx, { status: 'err', err: e.message }); }
   };
 
@@ -343,11 +353,24 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
         const sizeMB = (body.length / 1_000_000).toFixed(1);
         throw new Error(`anexo_muito_grande:${sizeMB}`);
       }
-      const res  = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      });
+      // AbortController de 90s — corta spinner infinito se Vercel cortar o
+      // serverless e devolver HTML 504/500 que o app pode demorar a perceber.
+      const controller = new AbortController();
+      const abortTimer = setTimeout(() => controller.abort(), 90000);
+      let res;
+      try {
+        res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          signal: controller.signal,
+        });
+      } catch (fetchErr) {
+        clearTimeout(abortTimer);
+        if (fetchErr.name === 'AbortError') throw new Error('servidor_demorou');
+        throw fetchErr;
+      }
+      clearTimeout(abortTimer);
       // Vercel rejeição (413, 504, 500 sem body JSON) volta como text/html — protege o parse.
       const ct = res.headers.get('content-type') || '';
       if (!ct.includes('application/json')) {
