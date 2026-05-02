@@ -24,9 +24,21 @@ export const authOptions = {
     }),
   ],
   callbacks: {
-    async signIn() {
-      // Autoriza qualquer Google account. Validações de domínio/whitelist
-      // poderiam entrar aqui no futuro.
+    async signIn({ user }) {
+      // App interno (decisão produto 2026-05-02): só emails na whitelist
+      // ALLOWED_EMAILS (CSV) podem logar. Sem env → ninguém entra (fail closed).
+      const raw = process.env.ALLOWED_EMAILS || '';
+      const whitelist = raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      const email = (user?.email || '').toLowerCase();
+
+      if (whitelist.length === 0) {
+        console.warn('[auth] ALLOWED_EMAILS não configurada — bloqueando todos os logins');
+        return false;
+      }
+      if (!whitelist.includes(email)) {
+        console.warn(`[auth] Login bloqueado (fora da whitelist): ${email}`);
+        return false;
+      }
       return true;
     },
 
