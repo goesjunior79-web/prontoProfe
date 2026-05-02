@@ -125,7 +125,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       result,
-      model:           CLAUDE_MODEL,
+      model:           modelChoice,
       tipo_de_saida:   tipo_de_saida || null,
       prompt_versao:   pipelineResult.promptVersao,
       pipeline_passed: pipelineResult.passed,
