@@ -8,7 +8,8 @@ import { runPipeline } from '../../lib/llm/pipeline';
 import { listModelos, getSignedDownloadUrl } from '../../lib/db/modelos';
 
 const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL_FULL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL_FAST = 'claude-haiku-4-5-20251001'; // 2x mais rápido, cabe em 60s com contexto pesado
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
@@ -86,20 +87,24 @@ export default async function handler(req, res) {
 
     const userMessage = buildAnthropicMessages(prompt, tipo_de_saida, augmentedFiles);
 
-    // Heurística: prompts grandes ou com modelo PDF anexado → skip Critic
-    // pra caber dentro dos 60s do Hobby. Validador determinístico já corre
-    // em todo caso (estrutura/termos proibidos), só pulamos a re-geração LLM.
+    // Heurística: prompts grandes ou com modelo PDF anexado → contexto pesado.
+    // - Skip Critic (economiza 1 LLM call ~20s)
+    // - Usa Haiku (2x mais rápido que Sonnet, cabe em 60s)
+    // - max_tokens 4000 em vez de 8000 (output mais curto, mais rápido)
     const promptSize = prompt.length;
     const hasHeavyAttachment = augmentedFiles.some(f => (f.b64 || '').length > 100_000);
     const heavyContext = promptSize > 40_000 || hasHeavyAttachment;
 
+    const modelChoice = heavyContext ? CLAUDE_MODEL_FAST : CLAUDE_MODEL_FULL;
+
     const pipelineResult = await runPipeline({
       client,
-      model: CLAUDE_MODEL,
+      model: modelChoice,
       userMessage,
       tipoDeSaida: tipo_de_saida,
       maxRetries: heavyContext ? 1 : 2,
       skipCritic: heavyContext,
+      maxTokens: heavyContext ? 4000 : undefined, // default da pipeline = 8000
     });
 
     const result = pipelineResult.content;
