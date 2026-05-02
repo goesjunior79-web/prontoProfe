@@ -81,6 +81,8 @@ import {
   getUserByEmail,
   getUserById,
   updatePreferences,
+  updateProfile,
+  deleteAccount,
 } from '../../lib/db/users';
 
 beforeEach(() => {
@@ -215,5 +217,56 @@ describe('updatePreferences', () => {
   it('lança erro se Supabase falhar', async () => {
     supabase._setNextResults({ data: null, error: { message: 'rls policy violation' } });
     await expect(updatePreferences('uuid', {})).rejects.toThrow(/rls policy/);
+  });
+});
+
+describe('updateProfile', () => {
+  it('atualiza só campos permitidos', async () => {
+    supabase._setNextResults({
+      data: { id: 'uuid', nome: 'Sheila', cidade: 'BOTUCATU', escola: 'CE-228' },
+      error: null,
+    });
+
+    const result = await updateProfile('uuid', {
+      nome: 'Sheila',
+      cidade: 'BOTUCATU',
+      escola: 'CE-228',
+      _hack: 'tentativa-injection',
+    });
+    expect(result.nome).toBe('Sheila');
+    expect(result.cidade).toBe('BOTUCATU');
+  });
+
+  it('rejeita se nenhum campo válido', async () => {
+    await expect(updateProfile('uuid', { _hack: 'x' })).rejects.toThrow(/nenhum campo/);
+  });
+
+  it('lança erro se Supabase falhar', async () => {
+    supabase._setNextResults({ data: null, error: { message: 'db down' } });
+    await expect(updateProfile('uuid', { nome: 'X' })).rejects.toThrow(/db down/);
+  });
+});
+
+describe('deleteAccount', () => {
+  it('cascata soft-delete e retorna usuário deletado', async () => {
+    // Mock só consome resultado do .single() final (cascade updates resolvem
+    // pelo builder não-thenable e não consomem fila).
+    supabase._setNextResults({
+      data: { id: 'uuid', deleted_at: '2026-04-29T00:00:00Z' },
+      error: null,
+    });
+
+    const result = await deleteAccount('uuid');
+    expect(result.id).toBe('uuid');
+    expect(result.deleted_at).toBeTruthy();
+  });
+
+  it('rejeita se userId ausente', async () => {
+    await expect(deleteAccount(null)).rejects.toThrow(/userId/);
+  });
+
+  it('lança erro se update final falhar', async () => {
+    supabase._setNextResults({ data: null, error: { message: 'fk constraint' } });
+    await expect(deleteAccount('uuid')).rejects.toThrow(/fk constraint/);
   });
 });
