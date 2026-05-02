@@ -14,6 +14,13 @@ const nextConfig = {
 
   async headers() {
     return [
+      // HTML não-imutável: revalida a cada request (evita bundle JS antigo após deploy)
+      {
+        source: '/((?!_next/static|favicon|.*\\.(jpg|jpeg|png|svg|webp|ico|woff2?|ttf)).*)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+        ],
+      },
       {
         source: '/(.*)',
         headers: [
