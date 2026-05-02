@@ -5,6 +5,7 @@ import { getOrCreateProfile, incrementUsage } from '../../lib/db/profile';
 import { saveGeneration } from '../../lib/db/history';
 import { isTipoDeSaidaValido } from '../../lib/prompts/master';
 import { runPipeline } from '../../lib/llm/pipeline';
+import { listModelos, getSignedDownloadUrl } from '../../lib/db/modelos';
 
 const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
@@ -52,7 +53,36 @@ export default async function handler(req, res) {
   // ── Geração via pipeline Generator + Critic (ADR-002) ─────────────────────
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const userMessage = buildAnthropicMessages(prompt, tipo_de_saida, files);
+
+    // Modelo padrão da professora (anexa automaticamente como contexto)
+    let modeloDefault = null;
+    try {
+      const userId = profile?.id || null;
+      // profile vem por email — buscamos modelo via session.user.id direto se disponível
+      const allModelos = session.user.id ? await listModelos(session.user.id) : [];
+      modeloDefault = allModelos.find(m => m.is_default) || null;
+    } catch (e) { console.warn('listModelos falhou:', e.message); }
+
+    let augmentedFiles = [...(files || [])];
+    if (modeloDefault && session.user.id) {
+      try {
+        const signed = await getSignedDownloadUrl(session.user.id, modeloDefault.id, 60);
+        if (signed?.url) {
+          const fileBuf = await fetch(signed.url).then(r => r.arrayBuffer());
+          const b64 = Buffer.from(fileBuf).toString('base64');
+          if (modeloDefault.tipo === 'pdf') {
+            augmentedFiles.unshift({ type: 'pdf', b64, name: `MODELO_${modeloDefault.nome}` });
+          } else if (modeloDefault.tipo === 'imagem') {
+            const ext = (modeloDefault.nome.split('.').pop() || '').toLowerCase();
+            const mediaType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+            augmentedFiles.unshift({ type: 'img', b64, mediaType, name: `MODELO_${modeloDefault.nome}` });
+          }
+          // docx pega caminho diferente — mammoth não roda no edge, deixa pra depois
+        }
+      } catch (e) { console.warn('Falha ao anexar modelo:', e.message); }
+    }
+
+    const userMessage = buildAnthropicMessages(prompt, tipo_de_saida, augmentedFiles);
 
     const pipelineResult = await runPipeline({
       client,

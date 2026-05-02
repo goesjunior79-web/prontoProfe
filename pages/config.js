@@ -23,13 +23,17 @@ export default function ConfigPage() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [uploadingKey, setUploadingKey] = useState(null);
+  const [modelos, setModelos] = useState([]);
+  const [uploadingModelo, setUploadingModelo] = useState(false);
+  const [modeloProgress, setModeloProgress] = useState(0);
 
   useEffect(() => {
     if (status !== 'authenticated') return;
     Promise.all([
       fetch('/api/me').then(r => r.json()),
       fetch('/api/assets/status').then(r => r.json()),
-    ]).then(([me, assets]) => {
+      fetch('/api/modelos').then(r => r.json()).catch(() => ({ modelos: [] })),
+    ]).then(([me, assets, mod]) => {
       if (me?.user) {
         setUser(me.user);
         setProfile({
@@ -43,6 +47,7 @@ export default function ConfigPage() {
         });
       }
       setAssetStatus(assets);
+      setModelos(mod?.modelos || []);
       setLoading(false);
     }).catch(e => {
       setErr(e.message);
@@ -135,6 +140,80 @@ export default function ConfigPage() {
     }
   };
 
+  // ── Modelos persistentes (PDF/Word/Imagem grande via signed URL) ─────────
+  const handleUploadModelo = async (file, descricao = '') => {
+    if (!file) return;
+    const MAX_BYTES = 10 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      setErr(`Arquivo de ${(file.size / 1_000_000).toFixed(1)} MB excede limite de 10 MB.`);
+      return;
+    }
+    setUploadingModelo(true); setMsg(''); setErr(''); setModeloProgress(0);
+    try {
+      // 1. Pede signed URL ao backend
+      const sign = await fetch('/api/modelos/sign-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, mime: file.type, sizeBytes: file.size }),
+      }).then(r => r.json());
+      if (!sign.uploadUrl) throw new Error(sign.message || 'Não foi possível gerar URL de upload');
+
+      // 2. PUT direto pro Supabase Storage (bypassa Vercel)
+      const putRes = await fetch(sign.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      if (!putRes.ok) throw new Error(`Falha no upload (status ${putRes.status})`);
+
+      // 3. Registra metadata
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      const tipo = ext === 'pdf' ? 'pdf' : ['doc','docx'].includes(ext) ? 'docx' : 'imagem';
+      const reg = await fetch('/api/modelos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: file.name,
+          descricao,
+          tipo,
+          storagePath: sign.path,
+          sizeBytes: file.size,
+          isDefault: modelos.length === 0, // primeiro modelo vira default
+        }),
+      }).then(r => r.json());
+      if (!reg.modelo) throw new Error(reg.message || 'Falha ao registrar modelo');
+
+      setModelos(prev => [reg.modelo, ...prev.map(m => ({ ...m, is_default: reg.modelo.is_default ? false : m.is_default }))]);
+      setMsg(`✓ Modelo "${file.name}" salvo${reg.modelo.is_default ? ' como padrão' : ''}.`);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setUploadingModelo(false); setModeloProgress(0);
+    }
+  };
+
+  const handleSetDefault = async (modeloId) => {
+    try {
+      const r = await fetch(`/api/modelos/${modeloId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDefault: true }),
+      }).then(r => r.json());
+      if (!r.modelo) throw new Error(r.message || 'Erro');
+      setModelos(prev => prev.map(m => ({ ...m, is_default: m.id === modeloId })));
+    } catch (e) { setErr(e.message); }
+  };
+
+  const handleDeleteModelo = async (modeloId, nome) => {
+    if (!window.confirm(`Excluir modelo "${nome}"? Não tem volta.`)) return;
+    try {
+      const r = await fetch(`/api/modelos/${modeloId}`, { method: 'DELETE' });
+      if (!r.ok && r.status !== 204) throw new Error('Erro ao excluir');
+      setModelos(prev => prev.filter(m => m.id !== modeloId));
+      setMsg('✓ Modelo excluído');
+    } catch (e) { setErr(e.message); }
+  };
+
   return (
     <>
       <Head><title>Configurações — ProntoProfe!</title></Head>
@@ -160,6 +239,66 @@ export default function ConfigPage() {
             <Field label="Escola (código)">
               <input style={inp} value={profile.escola} onChange={e => setProfile({...profile, escola: e.target.value})} placeholder="Ex: CE-228" />
             </Field>
+          </section>
+
+          {/* Modelos persistentes */}
+          <section style={cardStyle}>
+            <h2 style={sectionTitle}>📑 Meus modelos de referência</h2>
+            <p style={helpText}>
+              Suba PDFs ou Word de atividades/provas que servem de modelo. A IA usa
+              o modelo <b>padrão</b> automaticamente em todas as gerações para imitar
+              seu estilo. Limite por arquivo: 10 MB.
+            </p>
+
+            <label style={{...btnSec, display: 'inline-block', marginBottom: 10}}>
+              {uploadingModelo ? '⏳ Enviando…' : '📎 Adicionar modelo (PDF, Word ou Imagem)'}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                style={{display: 'none'}}
+                disabled={uploadingModelo}
+                onChange={e => handleUploadModelo(e.target.files?.[0])}
+              />
+            </label>
+
+            {modelos.length === 0 ? (
+              <div style={{fontSize: 12, color: '#888', padding: '8px 0'}}>
+                Nenhum modelo salvo ainda.
+              </div>
+            ) : (
+              <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+                {modelos.map(m => (
+                  <div key={m.id} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    gap: 10, padding: '10px 12px',
+                    border: m.is_default ? '1.5px solid #003DA5' : '1px solid #E0DDD5',
+                    borderRadius: 8,
+                    background: m.is_default ? '#F0F4FA' : '#fff',
+                  }}>
+                    <div style={{flex: 1, minWidth: 0}}>
+                      <div style={{fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                        {m.is_default && <span style={{color:'#003DA5', marginRight: 6}}>★</span>}
+                        {m.nome}
+                      </div>
+                      <div style={{fontSize: 10, color: '#888', marginTop: 2}}>
+                        {m.tipo.toUpperCase()} · {(m.size_bytes / 1_000_000).toFixed(2)} MB ·
+                        {' '}{new Date(m.created_at).toLocaleDateString('pt-BR')}
+                      </div>
+                    </div>
+                    <div style={{display: 'flex', gap: 6}}>
+                      {!m.is_default && (
+                        <button onClick={() => handleSetDefault(m.id)} style={{...btnSec, fontSize: 11, padding: '4px 8px'}}>
+                          Marcar padrão
+                        </button>
+                      )}
+                      <button onClick={() => handleDeleteModelo(m.id, m.nome)} style={{...btnDanger, fontSize: 11, padding: '4px 8px'}}>
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Preferências pedagógicas */}
