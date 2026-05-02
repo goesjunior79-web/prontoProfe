@@ -59,7 +59,9 @@ export default async function handler(req, res) {
       model: CLAUDE_MODEL,
       userMessage,
       tipoDeSaida: tipo_de_saida,
-      maxRetries: 3,
+      // Hobby: pipeline 6 calls (3 retries × Generator+Critic) pode passar 60s.
+      // Reduzido pra 2 = max 4 calls. Antes era 3.
+      maxRetries: 2,
     });
 
     const result = pipelineResult.content;
@@ -138,4 +140,9 @@ function buildAnthropicMessages(prompt, tipoDeSaida, files) {
 }
 
 
-export const config = { api: { bodyParser: { sizeLimit: '12mb' } } };
+// maxDuration: Vercel Hobby permite até 60s (default = 10s, insuficiente
+// pra pipeline LLM com retries). Audit 2026-05-02 CRITICAL #2.
+export const config = {
+  api: { bodyParser: { sizeLimit: '12mb' } },
+  maxDuration: 60,
+};

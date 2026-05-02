@@ -77,4 +77,7 @@ Se não conseguir ler a resposta de uma questão, use atingido: 0 e comentario: 
   }
 }
 
-export const config = { api: { bodyParser: { sizeLimit: '8mb' } } };
+export const config = {
+  api: { bodyParser: { sizeLimit: '8mb' } },
+  maxDuration: 60,
+};

@@ -171,6 +171,10 @@ export default async function handler(req, res) {
   }
 }
 
+// maxDuration estendido — classificação de turma com 30+ alunos
+// pode passar de 10s default Hobby.
+export const config = { maxDuration: 60 };
+
 function estimateCost(usage, model) {
   if (!usage) return 0;
   const rates = { 'claude-sonnet-4-6': { input: 3, output: 15, cache_read: 0.3, cache_creation: 3.75 } };
