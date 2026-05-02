@@ -224,8 +224,11 @@ export default function PtdPage() {
 
               <div style={actionsStyle}>
                 <button onClick={handleDownloadDocx} style={btnPri}>📥 Baixar Word (.docx)</button>
-                <Link href="/" style={{ ...btnSec, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-                  📅 Gerar aula semanal (em breve — US-006)
+                <Link
+                  href={{ pathname: '/aula', query: { ano: form.ano, componente: form.componente, capitulo: form.capitulo } }}
+                  style={{ ...btnSec, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+                >
+                  📅 Gerar aula semanal
                 </Link>
               </div>
 

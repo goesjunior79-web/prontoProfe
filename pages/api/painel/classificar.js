@@ -75,13 +75,24 @@ export default async function handler(req, res) {
       return res.status(200).json({ tabela: [], custo: 0, savedCount: 0 });
     }
 
-    const dadosDosAlunos = alunos.map(a => ({
-      alunoId: a.id,
-      nome: a.nome,
-      turma: a.turma,
-      serie: a.serie,
-      observacaoNEE: a.obs_nee || null,
-    }));
+    // Privacidade (decisão produto 2026-05-02): app interno, dados de aluno
+    // são sigilosos. IA recebe apenas:
+    //  - primeiro nome (sem sobrenome)
+    //  - turma + série (info pedagógica básica)
+    //  - obs_nee SOMENTE se a professora marcou opt-in (permite_ia_usar_obs=true)
+    const dadosDosAlunos = alunos.map(a => {
+      const primeiroNome = (a.nome || '').trim().split(/\s+/)[0] || '';
+      const payload = {
+        alunoId: a.id,
+        nome: primeiroNome,
+        turma: a.turma,
+        serie: a.serie,
+      };
+      if (a.permite_ia_usar_obs && a.obs_nee) {
+        payload.observacaoNEE = a.obs_nee;
+      }
+      return payload;
+    });
 
     const userMessage = `Componente: ${componente}\n\nDados dos alunos da turma ${turma}:\n${JSON.stringify(dadosDosAlunos, null, 2)}`;
 
@@ -105,6 +116,9 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'parse_error', message: 'LLM não retornou JSON válido', raw: text });
     }
 
+    // Mapa pra restaurar nome completo a partir do alunoId (IA só viu primeiro nome)
+    const nomeCompletoPorId = new Map(alunos.map(a => [a.id, a.nome]));
+
     const tabela = (parsed.tabela || []).filter(row => {
       // Sanity check: nivel ∈ N1-N4
       if (!['N1', 'N2', 'N3', 'N4'].includes(row.nivel)) return false;
@@ -114,6 +128,9 @@ export default async function handler(req, res) {
         const map = { N1: INTERVENCOES_VALIDAS[0], N2: INTERVENCOES_VALIDAS[1], N3: INTERVENCOES_VALIDAS[2], N4: INTERVENCOES_VALIDAS[3] };
         row.intervencao = map[row.nivel];
       }
+      // Restaura nome completo (privacidade: IA só viu primeiro nome)
+      const nomeCompleto = nomeCompletoPorId.get(row.alunoId);
+      if (nomeCompleto) row.nome = nomeCompleto;
       return true;
     });
 

@@ -12,7 +12,7 @@ const inp = {
 const sel = { ...inp };
 
 function initAluno() {
-  return { nome: '', turma: 'A', serie: '', disciplina: '', obs: '', consentido: false };
+  return { nome: '', turma: 'A', serie: '', disciplina: '', obs: '', permite_ia_usar_obs: false, consentido: false };
 }
 
 export default function AlunosModal({ onClose }) {
@@ -211,6 +211,26 @@ export default function AlunosModal({ onClose }) {
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#555', marginBottom: 4 }}>Necessidade educacional especial (opcional)</div>
                 <input style={inp} placeholder="Ex: TDAH, dislexia, deficiência visual, aluno laudado..." value={form.obs} onChange={e => setForm(f => ({ ...f, obs: e.target.value }))} />
+
+                {form.obs.trim() && (
+                  <div style={{ background: '#F0F9FF', border: '0.5px solid #BAE6FD', borderRadius: 7, padding: '9px 11px', marginTop: 6 }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: 11.5, color: '#0C4A6E' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!form.permite_ia_usar_obs}
+                        onChange={e => setForm(f => ({ ...f, permite_ia_usar_obs: e.target.checked }))}
+                        style={{ marginTop: 2, accentColor: '#0369A1' }}
+                      />
+                      <span>
+                        <b>Permitir IA usar este laudo</b> ao classificar/sugerir intervenções para este aluno.
+                        <br />
+                        <span style={{ fontSize: 10.5, color: '#475569' }}>
+                          Por padrão, o laudo NÃO é enviado para a IA. Marque só se julgar necessário para personalização.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* Checkbox de consentimento LGPD — obrigatório em novos cadastros (US-012) */}

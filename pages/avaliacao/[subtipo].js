@@ -146,7 +146,7 @@ export default function AvaliacaoSubtipo() {
                 <textarea
                   value={alunos} onChange={e => setAlunos(e.target.value)}
                   style={{ ...inp, minHeight: 80, fontFamily: 'inherit', resize: 'vertical' }}
-                  placeholder="Ana Silva\nBento Maciel\nMaria Souza"
+                  placeholder={"Ana Silva\nBento Maciel\nMaria Souza"}
                 />
               </Field>
             )}

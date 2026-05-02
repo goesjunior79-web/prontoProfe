@@ -26,6 +26,10 @@ vi.mock('../../lib/supabase', () => {
         this._filters.push({ col, val });
         return this;
       }),
+      is: vi.fn(function (col, val) {
+        this._filters.push({ col, val, op: 'is' });
+        return this;
+      }),
       insert: vi.fn(function (payload) {
         this._operation = 'insert';
         this._payload = payload;

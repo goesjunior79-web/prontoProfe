@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { nome, turma, serie, obs_nee, consentido } = req.body;
+      const { nome, turma, serie, obs_nee, permite_ia_usar_obs, consentido } = req.body;
 
       if (!consentido) {
         return res.status(400).json({
@@ -45,6 +45,7 @@ export default async function handler(req, res) {
         turma,
         serie,
         obs_nee,
+        permite_ia_usar_obs,
         consentido,
       });
 
