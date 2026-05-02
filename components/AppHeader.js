@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { signOut } from 'next-auth/react';
 import { PLAN_LIMITS, PLAN_LABELS } from '../lib/constants';
 import { btnPri, btnSec } from './ui';
@@ -66,7 +67,7 @@ export default function AppHeader({ cfg, plan, usage, session, onUpgradeClick, o
         {session?.user && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {session.user.image
-              ? <img src={session.user.image} alt="avatar" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+              ? <Image src={session.user.image} alt="avatar" width={28} height={28} style={{ borderRadius: '50%', objectFit: 'cover' }} referrerPolicy="no-referrer" unoptimized={false} />
               : <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#003DA5', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>{session.user.name?.[0] ?? '?'}</div>
             }
             <button style={{ ...btnSec, fontSize: 11 }} onClick={() => signOut()} title="Sair">

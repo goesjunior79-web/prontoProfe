@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import { useDirtyWarning } from '../lib/hooks/useDirtyWarning';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -28,6 +29,9 @@ export default function PtdPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState(null);
   const [planejamentoId, setPlanejamentoId] = useState(null);
+
+  // Avisa antes de fechar a aba se há resultado não baixado.
+  useDirtyWarning(!!result);
 
   if (status === 'loading') {
     return <div style={loadingStyle}>Carregando…</div>;

@@ -14,6 +14,7 @@ import { useSession } from 'next-auth/react';
 import { DISCIPLINAS, SERIES } from '../lib/constants';
 import LoginGate from '../components/LoginGate';
 import AssetWarningBanner from '../components/AssetWarningBanner';
+import { useDirtyWarning } from '../lib/hooks/useDirtyWarning';
 
 const VARIANTES = [
   { value: '', label: '— Sem variante (genérica) —' },
@@ -35,6 +36,8 @@ export default function AtividadePage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [atividades, setAtividades] = useState([]);
   const [variante, setVariante] = useState('');
+
+  useDirtyWarning(atividades.length > 0);
 
   if (status === 'loading') return <div style={loadingStyle}>Carregando…</div>;
   if (status !== 'authenticated') return <LoginGate />;

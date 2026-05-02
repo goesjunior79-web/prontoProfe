@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useDirtyWarning } from '../lib/hooks/useDirtyWarning';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -34,6 +35,8 @@ export default function AulaPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState(null);
   const [diaSelecionado, setDiaSelecionado] = useState(null);
+
+  useDirtyWarning(!!result);
 
   // Auto-pop dos query params (vindos do botão "Gerar aula semanal" da Tela PTD)
   useEffect(() => {

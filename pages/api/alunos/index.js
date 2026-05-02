@@ -8,12 +8,16 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
 import { createAluno, listAlunos } from '../../../lib/db/alunos';
+import { requireSameOrigin } from '../../../lib/api/csrf';
+import { safeErrorMessage } from '../../../lib/api/safeError';
 
 export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.id) {
     return res.status(401).json({ error: 'auth_required', message: 'Faça login para continuar.' });
   }
+
+  if (!requireSameOrigin(req, res)) return;
 
   const userId = session.user.id;
 
@@ -24,7 +28,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ alunos });
     } catch (e) {
       console.error('GET /api/alunos:', e.message);
-      return res.status(500).json({ error: 'db_error', message: e.message });
+      return res.status(500).json({ error: 'db_error', message: safeErrorMessage(e) });
     }
   }
 
@@ -53,7 +57,7 @@ export default async function handler(req, res) {
     } catch (e) {
       console.error('POST /api/alunos:', e.message);
       const status = /obrigatóri|consent/i.test(e.message) ? 400 : 500;
-      return res.status(status).json({ error: 'db_error', message: e.message });
+      return res.status(status).json({ error: 'db_error', message: safeErrorMessage(e) });
     }
   }
 

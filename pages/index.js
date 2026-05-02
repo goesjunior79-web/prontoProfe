@@ -151,17 +151,14 @@ export default function Home() {
     updateFile(idx, { status: 'reading' });
     try {
       if (type === 'pdf') {
-        if (!window.pdfjsLib) await new Promise(r => setTimeout(r, 1500));
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        const buf = await file.arrayBuffer();
-        const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
-        updateFile(idx, { status: 'range', totalPages: pdf.numPages, rawFile: file });
-        setPageRanges(prev => ({ ...prev, [idx]: { from: 1, to: Math.min(pdf.numPages, 50) } }));
+        const { countPdfPages } = await import('../lib/loaders/fileExtractors');
+        const totalPages = await countPdfPages(file);
+        updateFile(idx, { status: 'range', totalPages, rawFile: file });
+        setPageRanges(prev => ({ ...prev, [idx]: { from: 1, to: Math.min(totalPages, 50) } }));
       } else if (type === 'word') {
-        if (!window.mammoth) await new Promise(r => setTimeout(r, 1500));
-        const buf = await file.arrayBuffer();
-        const r = await window.mammoth.extractRawText({ arrayBuffer: buf });
-        updateFile(idx, { status: 'ok', text: r.value });
+        const { extractFromDocx } = await import('../lib/loaders/fileExtractors');
+        const text = await extractFromDocx(file);
+        updateFile(idx, { status: 'ok', text });
       } else if (type === 'img') {
         const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result.split(',')[1]); r.readAsDataURL(file); });
         updateFile(idx, { status: 'ok', imgB64: b64, imgType: file.type });
@@ -177,18 +174,9 @@ export default function Home() {
     const range = pageRanges[idx] || {};
     updateFile(idx, { status: 'extracting' });
     try {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const buf = await f.rawFile.arrayBuffer();
-      const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
-      const from = Math.max(1, range.from || 1);
-      const to   = Math.min(pdf.numPages, range.to || pdf.numPages);
-      let text = '';
-      for (let p = from; p <= to; p++) {
-        const pg = await pdf.getPage(p);
-        const c = await pg.getTextContent();
-        text += c.items.map(i => i.str).join(' ') + '\n';
-      }
-      updateFile(idx, { status: 'ok', text, note: `Páginas ${from}–${to} de ${pdf.numPages}` });
+      const { extractFromPdf } = await import('../lib/loaders/fileExtractors');
+      const { texto, totalPages, from, to } = await extractFromPdf(f.rawFile, { from: range.from, to: range.to });
+      updateFile(idx, { status: 'ok', text: texto, note: `Páginas ${from}–${to} de ${totalPages}` });
     } catch (e) { updateFile(idx, { status: 'err', err: e.message }); }
   };
 
@@ -216,18 +204,13 @@ export default function Home() {
     const type = ext === 'pdf' ? 'pdf' : ['doc', 'docx'].includes(ext) ? 'word' : ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? 'img' : 'txt';
     try {
       if (type === 'pdf') {
-        if (!window.pdfjsLib) await new Promise(r => setTimeout(r, 1500));
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        const buf = await file.arrayBuffer();
-        const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
-        let text = '';
-        for (let p = 1; p <= pdf.numPages; p++) { const pg = await pdf.getPage(p); const c = await pg.getTextContent(); text += c.items.map(i => i.str).join(' ') + '\n'; }
-        setModelo({ name: file.name, text, type: 'pdf' });
+        const { extractFromPdf } = await import('../lib/loaders/fileExtractors');
+        const { texto } = await extractFromPdf(file);
+        setModelo({ name: file.name, text: texto, type: 'pdf' });
       } else if (type === 'word') {
-        if (!window.mammoth) await new Promise(r => setTimeout(r, 1500));
-        const buf = await file.arrayBuffer();
-        const r = await window.mammoth.extractRawText({ arrayBuffer: buf });
-        setModelo({ name: file.name, text: r.value, type: 'word' });
+        const { extractFromDocx } = await import('../lib/loaders/fileExtractors');
+        const text = await extractFromDocx(file);
+        setModelo({ name: file.name, text, type: 'word' });
       } else if (type === 'img') {
         const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result.split(',')[1]); r.readAsDataURL(file); });
         setModelo({ name: file.name, imgB64: b64, imgType: file.type, type: 'img' });
@@ -559,8 +542,6 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
     <Head>
       <title>ProntoProfe! — Assistente da Professora</title>
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" />
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" />
     </Head>
 
     <div className="sidenav-offset" style={{ minHeight: '100vh', background: '#F7F6F3', fontFamily: 'system-ui,-apple-system,sans-serif' }}>

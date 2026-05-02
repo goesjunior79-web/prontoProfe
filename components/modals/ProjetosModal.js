@@ -25,31 +25,19 @@ async function extrairTexto(file, pageRange) {
   }
 
   if (tipo === 'word') {
-    if (!window.mammoth) await new Promise(r => setTimeout(r, 1500));
-    const buf = await file.arrayBuffer();
-    const r   = await window.mammoth.extractRawText({ arrayBuffer: buf });
-    return { tipo, texto: r.value, totalPaginas: null, nota: '' };
+    const { extractFromDocx } = await import('../../lib/loaders/fileExtractors');
+    const text = await extractFromDocx(file);
+    return { tipo, texto: text, totalPaginas: null, nota: '' };
   }
 
   if (tipo === 'pdf') {
-    if (!window.pdfjsLib) await new Promise(r => setTimeout(r, 1500));
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    const buf = await file.arrayBuffer();
-    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
-    const total = pdf.numPages;
-
-    if (!pageRange) return { tipo, texto: null, totalPaginas: total, nota: '' };
-
-    const from = Math.max(1, pageRange.from || 1);
-    const to   = Math.min(total, pageRange.to || total);
-    let texto  = '';
-    for (let p = from; p <= to; p++) {
-      const pg = await pdf.getPage(p);
-      const c  = await pg.getTextContent();
-      texto   += c.items.map(i => i.str).join(' ') + '\n';
+    const { extractFromPdf, countPdfPages } = await import('../../lib/loaders/fileExtractors');
+    if (!pageRange) {
+      const total = await countPdfPages(file);
+      return { tipo, texto: null, totalPaginas: total, nota: '' };
     }
-    return { tipo, texto, totalPaginas: total, nota: `Páginas ${from}–${to} de ${total}` };
+    const { texto, totalPages, from, to } = await extractFromPdf(file, { from: pageRange.from, to: pageRange.to });
+    return { tipo, texto, totalPaginas: totalPages, nota: `Páginas ${from}–${to} de ${totalPages}` };
   }
 }
 

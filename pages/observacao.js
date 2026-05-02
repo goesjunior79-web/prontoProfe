@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import LoginGate from '../components/LoginGate';
 import AssetWarningBanner from '../components/AssetWarningBanner';
+import { useDirtyWarning } from '../lib/hooks/useDirtyWarning';
 
 export default function ObservacaoPage() {
   const { data: session, status } = useSession();
@@ -22,6 +23,8 @@ export default function ObservacaoPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState(null);
+
+  useDirtyWarning(!!result);
 
   useEffect(() => {
     if (status !== 'authenticated') return;

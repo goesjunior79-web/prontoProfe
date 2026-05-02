@@ -9,12 +9,17 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
 import { getUserById, updateProfile, updatePreferences, deleteAccount } from '../../../lib/db/users';
+import { requireSameOrigin } from '../../../lib/api/csrf';
+import { safeErrorMessage } from '../../../lib/api/safeError';
 
 export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.id) {
     return res.status(401).json({ error: 'auth_required', message: 'Faça login para continuar.' });
   }
+
+  // CSRF guard nos métodos mutantes (PUT/DELETE).
+  if (!requireSameOrigin(req, res)) return;
 
   const userId = session.user.id;
 
@@ -25,7 +30,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ user });
     } catch (e) {
       console.error('GET /api/me:', e.message);
-      return res.status(500).json({ error: 'db_error', message: e.message });
+      return res.status(500).json({ error: 'db_error', message: safeErrorMessage(e) });
     }
   }
 
@@ -48,7 +53,7 @@ export default async function handler(req, res) {
       return res.status(200).json(out);
     } catch (e) {
       console.error('PUT /api/me:', e.message);
-      return res.status(500).json({ error: 'db_error', message: e.message });
+      return res.status(500).json({ error: 'db_error', message: safeErrorMessage(e) });
     }
   }
 
@@ -61,11 +66,11 @@ export default async function handler(req, res) {
           message: 'Para excluir sua conta, envie { confirm: "EXCLUIR_MINHA_CONTA" }.',
         });
       }
-      const result = await deleteAccount(userId);
+      const result = await deleteAccount(userId, session.user.email);
       return res.status(200).json({ deleted: true, ...result });
     } catch (e) {
       console.error('DELETE /api/me:', e.message);
-      return res.status(500).json({ error: 'db_error', message: e.message });
+      return res.status(500).json({ error: 'db_error', message: safeErrorMessage(e) });
     }
   }
 

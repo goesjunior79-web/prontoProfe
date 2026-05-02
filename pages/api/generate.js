@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     return res.status(statusCode).json({
       error:   'api_error',
       message: userMessage,
-      detail:  error.message,
+      // detail removido (Fase 7) — vazava error.message do SDK Anthropic.
     });
   }
 }
