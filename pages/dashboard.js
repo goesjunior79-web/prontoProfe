@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import SideNav from '../components/BottomNav';
 
@@ -74,7 +75,7 @@ export default function MeusMateriais() {
           {/* Perfil */}
           <div style={{ background: '#fff', border: '0.5px solid #E0DDD5', borderRadius: 12, padding: '1.25rem', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
             {data.image
-              ? <img src={data.image} alt="avatar" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+              ? <Image src={data.image} alt="avatar" width={44} height={44} style={{ borderRadius: '50%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
               : <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#003DA5', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700 }}>{data.name?.[0] ?? '?'}</div>
             }
             <div>

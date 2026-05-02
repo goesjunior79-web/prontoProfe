@@ -21,6 +21,8 @@ import { supabase } from '../../../lib/supabase';
 import { ASSET_DEFINITIONS } from '../../../lib/assets/registry';
 import { BUCKETS } from '../../../lib/db/schema';
 import { logAcesso } from '../../../lib/db/audit';
+import { requireSameOrigin } from '../../../lib/api/csrf';
+import { safeErrorMessage } from '../../../lib/api/safeError';
 
 export const config = {
   api: { bodyParser: { sizeLimit: '12mb' } },
@@ -33,6 +35,8 @@ export default async function handler(req, res) {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'method_not_allowed' });
   }
+
+  if (!requireSameOrigin(req, res)) return;
 
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.id) {
@@ -75,7 +79,7 @@ export default async function handler(req, res) {
       .upload(path, buffer, { contentType: mime, upsert: true });
 
     if (upErr) {
-      return res.status(500).json({ error: 'upload_error', message: upErr.message });
+      return res.status(500).json({ error: 'upload_error', message: safeErrorMessage(upErr) });
     }
 
     await logAcesso({
@@ -88,6 +92,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ uploaded: true, path, size: buffer.length, assetKey });
   } catch (e) {
     console.error('POST /api/assets/upload:', e.message);
-    return res.status(500).json({ error: 'upload_error', message: e.message });
+    return res.status(500).json({ error: 'upload_error', message: safeErrorMessage(e) });
   }
 }

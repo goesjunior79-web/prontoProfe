@@ -16,6 +16,7 @@ import { authOptions } from '../auth/[...nextauth]';
 import { isAdminSession } from '../../../lib/admin';
 import { supabase } from '../../../lib/supabase';
 import { TABLES } from '../../../lib/db/schema';
+import { safeErrorMessage } from '../../../lib/api/safeError';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -73,6 +74,6 @@ export default async function handler(req, res) {
     });
   } catch (e) {
     console.error('GET /api/admin/cache-stats:', e.message);
-    return res.status(500).json({ error: 'db_error', message: e.message });
+    return res.status(500).json({ error: 'db_error', message: safeErrorMessage(e) });
   }
 }

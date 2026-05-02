@@ -13,9 +13,11 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
 import { supabase } from '../../lib/supabase';
 import { isAdminSession } from '../../lib/admin';
+import { requireSameOrigin } from '../../lib/api/csrf';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!requireSameOrigin(req, res)) return;
 
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.email) return res.status(401).json({ error: 'auth_required' });

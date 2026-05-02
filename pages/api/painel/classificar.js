@@ -18,6 +18,8 @@ import { authOptions } from '../auth/[...nextauth]';
 import Anthropic from '@anthropic-ai/sdk';
 import { listAlunos } from '../../../lib/db/alunos';
 import { createAvaliacao } from '../../../lib/db/avaliacoes';
+import { requireSameOrigin } from '../../../lib/api/csrf';
+import { safeErrorMessage } from '../../../lib/api/safeError';
 
 const MODEL = 'claude-sonnet-4-6';
 const TEMPERATURE = 0.2;
@@ -58,6 +60,8 @@ export default async function handler(req, res) {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'method_not_allowed' });
   }
+
+  if (!requireSameOrigin(req, res)) return;
 
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.id) return res.status(401).json({ error: 'auth_required' });
@@ -113,7 +117,7 @@ export default async function handler(req, res) {
       parsed = JSON.parse(cleaned);
     } catch (e) {
       console.error('Erro ao parsear JSON do classificador:', e.message);
-      return res.status(500).json({ error: 'parse_error', message: 'LLM não retornou JSON válido', raw: text });
+      return res.status(500).json({ error: 'parse_error', message: 'A classificação automática não pôde ser concluída. Tente novamente.' });
     }
 
     // Mapa pra restaurar nome completo a partir do alunoId (IA só viu primeiro nome)
@@ -163,7 +167,7 @@ export default async function handler(req, res) {
     });
   } catch (e) {
     console.error('POST /api/painel/classificar:', e.message);
-    return res.status(500).json({ error: 'classifier_error', message: e.message });
+    return res.status(500).json({ error: 'classifier_error', message: safeErrorMessage(e) });
   }
 }
 

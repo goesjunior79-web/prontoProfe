@@ -10,6 +10,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
 import { exportUserData } from '../../../lib/db/export';
+import { safeErrorMessage } from '../../../lib/api/safeError';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -23,13 +24,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const data = await exportUserData(session.user.id);
+    const data = await exportUserData(session.user.id, session.user.email);
     const filename = `sesi-edu-export-${session.user.id.slice(0, 8)}-${Date.now()}.json`;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    return res.status(200).send(JSON.stringify(data, null, 2));
+    // sem indent (-30% bytes) — auditoria recomendou
+    return res.status(200).send(JSON.stringify(data));
   } catch (e) {
     console.error('GET /api/me/export:', e.message);
-    return res.status(500).json({ error: 'export_error', message: e.message });
+    return res.status(500).json({ error: 'export_error', message: safeErrorMessage(e) });
   }
 }

@@ -8,12 +8,16 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
 import { getPlanejamento, softDeletePlanejamento } from '../../../lib/db/planejamentos';
+import { requireSameOrigin } from '../../../lib/api/csrf';
+import { safeErrorMessage } from '../../../lib/api/safeError';
 
 export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.id) {
     return res.status(401).json({ error: 'auth_required' });
   }
+
+  if (!requireSameOrigin(req, res)) return;
 
   const userId = session.user.id;
   const { id } = req.query;
@@ -26,7 +30,7 @@ export default async function handler(req, res) {
       if (!planejamento) return res.status(404).json({ error: 'not_found' });
       return res.status(200).json({ planejamento });
     } catch (e) {
-      return res.status(500).json({ error: 'db_error', message: e.message });
+      return res.status(500).json({ error: 'db_error', message: safeErrorMessage(e) });
     }
   }
 
@@ -35,7 +39,7 @@ export default async function handler(req, res) {
       await softDeletePlanejamento(userId, id);
       return res.status(204).end();
     } catch (e) {
-      return res.status(500).json({ error: 'db_error', message: e.message });
+      return res.status(500).json({ error: 'db_error', message: safeErrorMessage(e) });
     }
   }
 

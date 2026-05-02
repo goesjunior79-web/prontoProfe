@@ -8,6 +8,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useDirtyWarning } from '../../lib/hooks/useDirtyWarning';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -30,6 +31,8 @@ export default function AvaliacaoSubtipo() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [result, setResult] = useState(null);
+
+  useDirtyWarning(!!result);
 
   if (status === 'loading') return <div style={loadingStyle}>Carregando…</div>;
   if (status !== 'authenticated') return <LoginGate />;
