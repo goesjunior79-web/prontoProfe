@@ -202,21 +202,32 @@ export default function Home() {
     setModeloLoading(true);
     const ext = file.name.split('.').pop().toLowerCase();
     const type = ext === 'pdf' ? 'pdf' : ['doc', 'docx'].includes(ext) ? 'word' : ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? 'img' : 'txt';
+    // Limite conservador (Vercel cap = 4.5 MB no body; texto extraído + restante do prompt cabem com folga até ~5 MB de PDF)
+    const MAX_FILE_BYTES = 5_000_000;
+    const MAX_TEXT_CHARS = 80_000;
+    if (file.size > MAX_FILE_BYTES) {
+      setErrorMsg(`Arquivo de ${(file.size / 1_000_000).toFixed(1)} MB é grande demais. Limite: 5 MB. Tente: 1) selecionar páginas específicas, 2) usar Word em vez de PDF.`);
+      setModeloLoading(false);
+      return;
+    }
     try {
       if (type === 'pdf') {
         const { extractFromPdf } = await import('../lib/loaders/fileExtractors');
         const { texto } = await extractFromPdf(file);
-        setModelo({ name: file.name, text: texto, type: 'pdf' });
+        const truncado = texto.length > MAX_TEXT_CHARS;
+        setModelo({ name: file.name, text: truncado ? texto.slice(0, MAX_TEXT_CHARS) : texto, type: 'pdf', truncado });
+        if (truncado) setErrorMsg(`Modelo carregado, mas texto foi truncado (eram ${texto.length.toLocaleString('pt-BR')} chars; limite ${MAX_TEXT_CHARS.toLocaleString('pt-BR')}). A IA verá apenas o início.`);
       } else if (type === 'word') {
         const { extractFromDocx } = await import('../lib/loaders/fileExtractors');
         const text = await extractFromDocx(file);
-        setModelo({ name: file.name, text, type: 'word' });
+        const truncado = text.length > MAX_TEXT_CHARS;
+        setModelo({ name: file.name, text: truncado ? text.slice(0, MAX_TEXT_CHARS) : text, type: 'word', truncado });
       } else if (type === 'img') {
         const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result.split(',')[1]); r.readAsDataURL(file); });
         setModelo({ name: file.name, imgB64: b64, imgType: file.type, type: 'img' });
       } else {
         const text = await file.text();
-        setModelo({ name: file.name, text, type: 'txt' });
+        setModelo({ name: file.name, text: text.slice(0, MAX_TEXT_CHARS), type: 'txt' });
       }
     } catch (e) { setErrorMsg('Não foi possível ler o arquivo. Verifique se é um Word, PDF ou imagem válida.'); }
     setModeloLoading(false);
@@ -317,14 +328,34 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
     }).filter(Boolean);
     if (modelo?.imgB64) apiFiles.unshift({ type: 'img', b64: modelo.imgB64, mediaType: modelo.imgType, name: 'modelo_' + modelo.name });
     try {
+      const body = JSON.stringify({
+        prompt: buildPrompt(), files: apiFiles,
+        meta: { tipo: tab, titulo, disciplina: dp.disc, serie: dp.serie, turma: dp.turma },
+      });
+      // Vercel tem cap de 4.5 MB no body. Validação client-side antes de enviar
+      // (caso contrário, plataforma retorna HTML "An error occurred" que quebra o JSON.parse).
+      const VERCEL_BODY_CAP = 4_500_000;
+      if (body.length > VERCEL_BODY_CAP) {
+        const sizeMB = (body.length / 1_000_000).toFixed(1);
+        throw new Error(`anexo_muito_grande:${sizeMB}`);
+      }
       const res  = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: buildPrompt(), files: apiFiles,
-          meta: { tipo: tab, titulo, disciplina: dp.disc, serie: dp.serie, turma: dp.turma },
-        }),
+        body,
       });
+      // Vercel rejeição (413, 504, 500 sem body JSON) volta como text/html — protege o parse.
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        const txt = await res.text().catch(() => '');
+        if (res.status === 413 || /payload.*large|body.*too|too.*large/i.test(txt)) {
+          throw new Error('anexo_muito_grande:server');
+        }
+        if (res.status === 504 || /timeout|gateway.*time/i.test(txt)) {
+          throw new Error('servidor_demorou');
+        }
+        throw new Error('servidor_indisponivel');
+      }
       const data = await res.json();
       if (data.error === 'auth_required')  { setErrorMsg('Você foi desconectada. Recarregue a página e entre novamente.'); setLoading(false); return; }
       if (data.error === 'upgrade_required' || data.error === 'limit_reached') { setShowUpgrade(true); setLoading(false); return; }
@@ -353,10 +384,21 @@ IMPORTANTE: Use bullet points (•) para listas. Seja completo e detalhado em ca
       }
     } catch (e) {
       const msg = e.message || 'Erro desconhecido';
-      if (msg === 'servidor_sem_conexao') setErrorMsg('Não foi possível gerar o material. Tente novamente em instantes ou contate o suporte da sua unidade SESI.');
-      else if (msg.includes('fetch') || msg.includes('network')) setErrorMsg('Sem conexão com a internet. Verifique sua conexão e tente novamente.');
-      else if (msg.includes('timeout') || msg.includes('504')) setErrorMsg('A geração demorou demais. Tente: 1) enviar menos páginas do livro, 2) reduzir o texto de conteúdo, 3) tentar novamente.');
-      else setErrorMsg('Não foi possível gerar o material. Tente novamente.');
+      if (msg.startsWith('anexo_muito_grande')) {
+        const sz = msg.split(':')[1];
+        const ext = sz === 'server' ? '' : ` (~${sz} MB)`;
+        setErrorMsg(`O material anexado é grande demais${ext}. Limite: 4 MB. Tente: 1) selecionar só o capítulo no PDF, 2) usar Word em vez de PDF, 3) digitar o conteúdo direto no campo de texto.`);
+      } else if (msg === 'servidor_demorou' || msg.includes('timeout') || msg.includes('504')) {
+        setErrorMsg('A geração demorou demais. Tente: 1) enviar menos páginas do livro, 2) reduzir o texto de conteúdo, 3) tentar novamente.');
+      } else if (msg === 'servidor_indisponivel') {
+        setErrorMsg('O servidor respondeu de forma inesperada. Atualize a página (Ctrl+F5) e tente novamente.');
+      } else if (msg === 'servidor_sem_conexao') {
+        setErrorMsg('Não foi possível gerar o material. Tente novamente em instantes ou contate o suporte da sua unidade SESI.');
+      } else if (msg.includes('fetch') || msg.includes('network')) {
+        setErrorMsg('Sem conexão com a internet. Verifique sua conexão e tente novamente.');
+      } else {
+        setErrorMsg('Não foi possível gerar o material. Tente novamente.');
+      }
     }
     setLoading(false);
   };
