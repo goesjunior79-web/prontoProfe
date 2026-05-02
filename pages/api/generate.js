@@ -87,24 +87,26 @@ export default async function handler(req, res) {
 
     const userMessage = buildAnthropicMessages(prompt, tipo_de_saida, augmentedFiles);
 
-    // Heurística: prompts grandes ou com modelo PDF anexado → contexto pesado.
-    // - Skip Critic (economiza 1 LLM call ~20s)
-    // - Usa Haiku (2x mais rápido que Sonnet, cabe em 60s)
-    // - max_tokens 4000 em vez de 8000 (output mais curto, mais rápido)
+    // Modo econômico (env COST_SAVING_MODE=true): Haiku + skipCritic + 4000
+    // tokens. ~10x mais barato. Default ON durante fase de teste interno.
+    // Definir COST_SAVING_MODE=false na Vercel quando quiser qualidade Sonnet.
+    const costSaving = process.env.COST_SAVING_MODE !== 'false';
+
     const promptSize = prompt.length;
     const hasHeavyAttachment = augmentedFiles.some(f => (f.b64 || '').length > 100_000);
     const heavyContext = promptSize > 40_000 || hasHeavyAttachment;
 
-    const modelChoice = heavyContext ? CLAUDE_MODEL_FAST : CLAUDE_MODEL_FULL;
+    const useFast = costSaving || heavyContext;
+    const modelChoice = useFast ? CLAUDE_MODEL_FAST : CLAUDE_MODEL_FULL;
 
     const pipelineResult = await runPipeline({
       client,
       model: modelChoice,
       userMessage,
       tipoDeSaida: tipo_de_saida,
-      maxRetries: heavyContext ? 1 : 2,
-      skipCritic: heavyContext,
-      maxTokens: heavyContext ? 4000 : undefined, // default da pipeline = 8000
+      maxRetries: useFast ? 1 : 2,
+      skipCritic: useFast,
+      maxTokens: useFast ? 4000 : undefined,
     });
 
     const result = pipelineResult.content;

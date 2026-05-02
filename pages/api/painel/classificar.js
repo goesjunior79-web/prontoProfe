@@ -21,7 +21,9 @@ import { createAvaliacao } from '../../../lib/db/avaliacoes';
 import { requireSameOrigin } from '../../../lib/api/csrf';
 import { safeErrorMessage } from '../../../lib/api/safeError';
 
-const MODEL = 'claude-sonnet-4-6';
+const MODEL_FULL = 'claude-sonnet-4-6';
+const MODEL_FAST = 'claude-haiku-4-5-20251001';
+const MODEL = process.env.COST_SAVING_MODE !== 'false' ? MODEL_FAST : MODEL_FULL;
 const TEMPERATURE = 0.2;
 
 const SYSTEM_CLASSIFIER = `Você é professora especialista do SESI.
