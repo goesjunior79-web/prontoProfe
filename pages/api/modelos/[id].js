@@ -5,7 +5,7 @@
 
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
-import { setDefaultModelo, softDeleteModelo } from '../../../lib/db/modelos';
+import { setDefaultModelo, softDeleteModelo, updateTiposAplicaveis } from '../../../lib/db/modelos';
 import { requireSameOrigin } from '../../../lib/api/csrf';
 import { safeErrorMessage } from '../../../lib/api/safeError';
 
@@ -20,12 +20,12 @@ export default async function handler(req, res) {
 
   if (req.method === 'PATCH') {
     try {
-      const { isDefault } = req.body || {};
-      if (isDefault) {
-        const modelo = await setDefaultModelo(userId, id);
-        return res.status(200).json({ modelo });
-      }
-      return res.status(400).json({ error: 'noop' });
+      const { isDefault, tiposAplicaveis } = req.body || {};
+      let modelo = null;
+      if (isDefault) modelo = await setDefaultModelo(userId, id);
+      if (Array.isArray(tiposAplicaveis)) modelo = await updateTiposAplicaveis(userId, id, tiposAplicaveis);
+      if (!modelo) return res.status(400).json({ error: 'noop' });
+      return res.status(200).json({ modelo });
     } catch (e) {
       return res.status(500).json({ error: 'db_error', message: safeErrorMessage(e) });
     }

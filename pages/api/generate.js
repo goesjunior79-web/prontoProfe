@@ -57,13 +57,21 @@ export default async function handler(req, res) {
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    // Modelo padrão da professora (anexa automaticamente como contexto)
+    // Modelo padrão APLICÁVEL (filtrado por tipo_de_saida quando há restrição).
+    // Regra:
+    //  - tipos_aplicaveis vazio  → modelo "global", anexa sempre
+    //  - tipos_aplicaveis com X  → só anexa quando tipo_de_saida ∈ X
+    //  - meta.tipo (Prova/Plano/Atividade da home) também é considerado
     let modeloDefault = null;
     try {
-      const userId = profile?.id || null;
-      // profile vem por email — buscamos modelo via session.user.id direto se disponível
       const allModelos = session.user.id ? await listModelos(session.user.id) : [];
-      modeloDefault = allModelos.find(m => m.is_default) || null;
+      const tiposEsteRequest = [tipo_de_saida, meta?.tipo, meta?.tipo === 'plano' ? 'PTD' : null].filter(Boolean);
+      modeloDefault = allModelos.find(m => {
+        if (!m.is_default) return false;
+        const aplicaveis = Array.isArray(m.tipos_aplicaveis) ? m.tipos_aplicaveis : [];
+        if (aplicaveis.length === 0) return true; // global
+        return tiposEsteRequest.some(t => aplicaveis.includes(t));
+      }) || null;
     } catch (e) { console.warn('listModelos falhou:', e.message); }
 
     let augmentedFiles = [...(files || [])];

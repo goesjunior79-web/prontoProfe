@@ -204,6 +204,18 @@ export default function ConfigPage() {
     } catch (e) { setErr(e.message); }
   };
 
+  const handleSetTipos = async (modeloId, tiposAplicaveis) => {
+    try {
+      const r = await fetch(`/api/modelos/${modeloId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tiposAplicaveis }),
+      }).then(r => r.json());
+      if (!r.modelo) throw new Error(r.message || 'Erro');
+      setModelos(prev => prev.map(m => m.id === modeloId ? { ...m, tipos_aplicaveis: r.modelo.tipos_aplicaveis } : m));
+    } catch (e) { setErr(e.message); }
+  };
+
   const handleDeleteModelo = async (modeloId, nome) => {
     if (!window.confirm(`Excluir modelo "${nome}"? Não tem volta.`)) return;
     try {
@@ -266,36 +278,15 @@ export default function ConfigPage() {
                 Nenhum modelo salvo ainda.
               </div>
             ) : (
-              <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+              <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
                 {modelos.map(m => (
-                  <div key={m.id} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    gap: 10, padding: '10px 12px',
-                    border: m.is_default ? '1.5px solid #003DA5' : '1px solid #E0DDD5',
-                    borderRadius: 8,
-                    background: m.is_default ? '#F0F4FA' : '#fff',
-                  }}>
-                    <div style={{flex: 1, minWidth: 0}}>
-                      <div style={{fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                        {m.is_default && <span style={{color:'#003DA5', marginRight: 6}}>★</span>}
-                        {m.nome}
-                      </div>
-                      <div style={{fontSize: 10, color: '#888', marginTop: 2}}>
-                        {m.tipo.toUpperCase()} · {(m.size_bytes / 1_000_000).toFixed(2)} MB ·
-                        {' '}{new Date(m.created_at).toLocaleDateString('pt-BR')}
-                      </div>
-                    </div>
-                    <div style={{display: 'flex', gap: 6}}>
-                      {!m.is_default && (
-                        <button onClick={() => handleSetDefault(m.id)} style={{...btnSec, fontSize: 11, padding: '4px 8px'}}>
-                          Marcar padrão
-                        </button>
-                      )}
-                      <button onClick={() => handleDeleteModelo(m.id, m.nome)} style={{...btnDanger, fontSize: 11, padding: '4px 8px'}}>
-                        Excluir
-                      </button>
-                    </div>
-                  </div>
+                  <ModeloCard
+                    key={m.id}
+                    modelo={m}
+                    onSetDefault={() => handleSetDefault(m.id)}
+                    onSetTipos={tipos => handleSetTipos(m.id, tipos)}
+                    onDelete={() => handleDeleteModelo(m.id, m.nome)}
+                  />
                 ))}
               </div>
             )}
@@ -364,6 +355,99 @@ export default function ConfigPage() {
         </main>
       </div>
     </>
+  );
+}
+
+const TIPOS_MODELO = [
+  { value: 'atividade',          label: 'Atividade complementar' },
+  { value: 'avaliacao_capitulo', label: 'Avaliação por capítulo' },
+  { value: 'simulado',           label: 'Simulado' },
+  { value: 'PTD',                label: 'PTD / Plano de aula' },
+  { value: 'aula',               label: 'Aula diária' },
+  { value: 'observacao',         label: 'Observação de aluno' },
+  { value: 'relatorio',          label: 'Relatório de etapa' },
+  { value: 'prova',              label: 'Prova (geral)' },
+];
+
+function ModeloCard({ modelo, onSetDefault, onSetTipos, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const tiposAtuais = Array.isArray(modelo.tipos_aplicaveis) ? modelo.tipos_aplicaveis : [];
+
+  const toggle = (val) => {
+    const next = tiposAtuais.includes(val)
+      ? tiposAtuais.filter(t => t !== val)
+      : [...tiposAtuais, val];
+    onSetTipos(next);
+  };
+
+  const tiposLabel = tiposAtuais.length === 0
+    ? 'Aplica em todas as gerações'
+    : tiposAtuais.map(t => TIPOS_MODELO.find(x => x.value === t)?.label || t).join(', ');
+
+  return (
+    <div style={{
+      padding: '10px 12px',
+      border: modelo.is_default ? '1.5px solid #003DA5' : '1px solid #E0DDD5',
+      borderRadius: 8,
+      background: modelo.is_default ? '#F0F4FA' : '#fff',
+    }}>
+      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10}}>
+        <div style={{flex: 1, minWidth: 0}}>
+          <div style={{fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+            {modelo.is_default && <span style={{color:'#003DA5', marginRight: 6}}>★</span>}
+            {modelo.nome}
+          </div>
+          <div style={{fontSize: 10, color: '#888', marginTop: 2}}>
+            {modelo.tipo.toUpperCase()} · {(modelo.size_bytes / 1_000_000).toFixed(2)} MB ·
+            {' '}{new Date(modelo.created_at).toLocaleDateString('pt-BR')}
+          </div>
+          <div style={{fontSize: 11, color: '#003DA5', marginTop: 4, fontWeight: 500}}>
+            📌 {tiposLabel}
+          </div>
+        </div>
+        <div style={{display: 'flex', gap: 6, flexShrink: 0}}>
+          <button onClick={() => setEditing(v => !v)} style={{padding: '4px 8px', fontSize: 11, background: '#F1EFE8', color: '#333', border: '1px solid #D5D2CC', borderRadius: 7, cursor: 'pointer'}}>
+            {editing ? 'Fechar' : 'Aplicar em…'}
+          </button>
+          {!modelo.is_default && (
+            <button onClick={onSetDefault} style={{padding: '4px 8px', fontSize: 11, background: '#F1EFE8', color: '#333', border: '1px solid #D5D2CC', borderRadius: 7, cursor: 'pointer'}}>
+              Marcar padrão
+            </button>
+          )}
+          <button onClick={onDelete} style={{padding: '4px 8px', fontSize: 11, background: '#FEF2F2', color: '#991B1B', border: '1px solid #FCA5A5', borderRadius: 7, cursor: 'pointer'}}>
+            Excluir
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <div style={{marginTop: 10, padding: '10px 12px', background: '#fff', border: '1px dashed #D3D1C7', borderRadius: 7}}>
+          <div style={{fontSize: 11, color: '#555', marginBottom: 8, fontWeight: 600}}>
+            Anexar este modelo automaticamente quando gerar:
+          </div>
+          <div style={{display: 'flex', flexWrap: 'wrap', gap: 6}}>
+            {TIPOS_MODELO.map(t => {
+              const ativo = tiposAtuais.includes(t.value);
+              return (
+                <label key={t.value} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '4px 10px', fontSize: 11.5, cursor: 'pointer',
+                  border: ativo ? '1.5px solid #003DA5' : '1px solid #D3D1C7',
+                  borderRadius: 16, background: ativo ? '#E8EFFC' : '#fff', color: ativo ? '#003DA5' : '#555',
+                  fontWeight: ativo ? 600 : 400,
+                }}>
+                  <input type="checkbox" checked={ativo} onChange={() => toggle(t.value)} style={{margin: 0}} />
+                  {t.label}
+                </label>
+              );
+            })}
+          </div>
+          <div style={{fontSize: 10, color: '#888', marginTop: 8}}>
+            Sem nada marcado: o modelo aplica em <b>todas</b> as gerações (modelo global).
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
