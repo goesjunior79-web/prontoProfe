@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { runPipeline, estimateCost } from '../../lib/llm/pipeline';
+import { runPipeline, estimateCost, computeCacheStats } from '../../lib/llm/pipeline';
 
 /**
  * Cria mock do client Anthropic com sequência configurável de respostas.
@@ -304,5 +304,77 @@ describe('estimateCost', () => {
       cache_read_input_tokens: 0,
     };
     expect(estimateCost(usage, 'modelo-desconhecido')).toBe(3);
+  });
+});
+
+describe('computeCacheStats', () => {
+  it('retorna null se usage ausente', () => {
+    expect(computeCacheStats(null)).toBeNull();
+  });
+
+  it('hitRate=0 quando totalmente cold', () => {
+    const stats = computeCacheStats({
+      input_tokens: 1000,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    });
+    expect(stats.hitRate).toBe(0);
+    expect(stats.cacheRead).toBe(0);
+  });
+
+  it('hitRate=1 quando 100% cache_read', () => {
+    const stats = computeCacheStats({
+      input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 1000,
+    });
+    expect(stats.hitRate).toBe(1);
+  });
+
+  it('hitRate=0.5 com mix balanceado', () => {
+    const stats = computeCacheStats({
+      input_tokens: 500,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 500,
+    });
+    expect(stats.hitRate).toBe(0.5);
+  });
+
+  it('cache_creation conta como total mas não como hit', () => {
+    const stats = computeCacheStats({
+      input_tokens: 0,
+      cache_creation_input_tokens: 1000,
+      cache_read_input_tokens: 0,
+    });
+    expect(stats.hitRate).toBe(0);
+    expect(stats.totalInputCacheable).toBe(1000);
+  });
+
+  it('totalInputCacheable=0 retorna hitRate 0 sem div/0', () => {
+    const stats = computeCacheStats({
+      input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    });
+    expect(stats.hitRate).toBe(0);
+  });
+});
+
+describe('runPipeline — cacheStats no resultado', () => {
+  it('retorna cacheStats junto com resultado', async () => {
+    const client = makeClient([
+      makeResponse(VALID_OBSERVACAO, { input_tokens: 100, cache_read_input_tokens: 900 }),
+      makeResponse(VALID_OBSERVACAO, { input_tokens: 100, cache_read_input_tokens: 900 }),
+    ]);
+
+    const result = await runPipeline({
+      client,
+      model: 'claude-sonnet-4-6',
+      userMessage: [{ type: 'text', text: 'x' }],
+      tipoDeSaida: 'observacao',
+    });
+
+    expect(result.cacheStats).toBeDefined();
+    expect(result.cacheStats.hitRate).toBeGreaterThan(0);
   });
 });

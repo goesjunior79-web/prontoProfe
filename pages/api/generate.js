@@ -84,6 +84,7 @@ export default async function handler(req, res) {
       pipeline_passed: pipelineResult.passed,
       pipeline_attempts: pipelineResult.attempts,
       custo_estimado:  pipelineResult.custoEstimado,
+      cache_stats:     pipelineResult.cacheStats || null,
       warnings:        pipelineResult.warnings || [],
       usage:           profile.usage + 1,
       plan,
