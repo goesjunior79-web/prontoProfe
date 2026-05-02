@@ -143,9 +143,9 @@ export default function ConfigPage() {
   // ── Modelos persistentes (PDF/Word/Imagem grande via signed URL) ─────────
   const handleUploadModelo = async (file, descricao = '') => {
     if (!file) return;
-    const MAX_BYTES = 10 * 1024 * 1024;
+    const MAX_BYTES = 50 * 1024 * 1024;
     if (file.size > MAX_BYTES) {
-      setErr(`Arquivo de ${(file.size / 1_000_000).toFixed(1)} MB excede limite de 10 MB.`);
+      setErr(`Arquivo de ${(file.size / 1_000_000).toFixed(1)} MB excede limite de 50 MB.`);
       return;
     }
     setUploadingModelo(true); setMsg(''); setErr(''); setModeloProgress(0);
@@ -247,7 +247,7 @@ export default function ConfigPage() {
             <p style={helpText}>
               Suba PDFs ou Word de atividades/provas que servem de modelo. A IA usa
               o modelo <b>padrão</b> automaticamente em todas as gerações para imitar
-              seu estilo. Limite por arquivo: 10 MB.
+              seu estilo. Limite por arquivo: 50 MB.
             </p>
 
             <label style={{...btnSec, display: 'inline-block', marginBottom: 10}}>

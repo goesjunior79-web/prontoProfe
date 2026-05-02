@@ -27,7 +27,9 @@ export default async function handler(req, res) {
     console.warn('tipo_de_saida desconhecido:', tipo_de_saida);
   }
 
-  const MAX_PROMPT = 120000;
+  // Sonnet 4.6 aceita até 200k tokens no contexto. Margem pra system prompt
+  // + output, deixamos 180k chars de prompt user (~45k tokens) como teto duro.
+  const MAX_PROMPT = 180000;
   if (prompt.length > MAX_PROMPT) {
     return res.status(400).json({ error: 'prompt_too_large', message: 'Conteúdo muito extenso. Reduza o texto enviado e tente novamente.' });
   }
@@ -84,14 +86,20 @@ export default async function handler(req, res) {
 
     const userMessage = buildAnthropicMessages(prompt, tipo_de_saida, augmentedFiles);
 
+    // Heurística: prompts grandes ou com modelo PDF anexado → skip Critic
+    // pra caber dentro dos 60s do Hobby. Validador determinístico já corre
+    // em todo caso (estrutura/termos proibidos), só pulamos a re-geração LLM.
+    const promptSize = prompt.length;
+    const hasHeavyAttachment = augmentedFiles.some(f => (f.b64 || '').length > 100_000);
+    const heavyContext = promptSize > 40_000 || hasHeavyAttachment;
+
     const pipelineResult = await runPipeline({
       client,
       model: CLAUDE_MODEL,
       userMessage,
       tipoDeSaida: tipo_de_saida,
-      // Hobby: pipeline 6 calls (3 retries × Generator+Critic) pode passar 60s.
-      // Reduzido pra 2 = max 4 calls. Antes era 3.
-      maxRetries: 2,
+      maxRetries: heavyContext ? 1 : 2,
+      skipCritic: heavyContext,
     });
 
     const result = pipelineResult.content;

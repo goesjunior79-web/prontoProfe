@@ -18,7 +18,7 @@ import { BUCKETS } from '../../../lib/db/schema';
 import { requireSameOrigin } from '../../../lib/api/csrf';
 import { safeErrorMessage } from '../../../lib/api/safeError';
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB (alinhado com bucket user-assets)
+const MAX_BYTES = 50 * 1024 * 1024; // 50 MB (alinhado com bucket user-assets)
 const ALLOWED_MIME = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
