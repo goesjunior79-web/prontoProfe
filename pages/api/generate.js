@@ -8,8 +8,10 @@ import { runPipeline } from '../../lib/llm/pipeline';
 import { listModelos, getSignedDownloadUrl } from '../../lib/db/modelos';
 
 const PLAN_LIMITS = { free: 10, pro: 150, school: Infinity };
-const CLAUDE_MODEL_FULL = 'claude-sonnet-4-6';
-const CLAUDE_MODEL_FAST = 'claude-haiku-4-5-20251001'; // 2x mais rápido, cabe em 60s com contexto pesado
+// Sidney pediu "o melhor": Opus 4.7 (top da Anthropic). É lento (~40-60s) e
+// caro (~$0.30/geração), mas qualidade pedagógica máxima.
+const CLAUDE_MODEL_FULL = 'claude-opus-4-7';
+const CLAUDE_MODEL_FAST = 'claude-haiku-4-5-20251001'; // fallback rápido — usado em contexto MUITO pesado
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
@@ -95,16 +97,18 @@ export default async function handler(req, res) {
 
     const userMessage = buildAnthropicMessages(prompt, tipo_de_saida, augmentedFiles);
 
-    // Modo econômico (env COST_SAVING_MODE=true): Haiku + skipCritic + 4000
-    // tokens. ~10x mais barato. Default ON durante fase de teste interno.
-    // Definir COST_SAVING_MODE=false na Vercel quando quiser qualidade Sonnet.
-    const costSaving = process.env.COST_SAVING_MODE !== 'false';
+    // Política de modelo:
+    // - Default = Opus 4.7 (melhor) com skipCritic + 1 retry pra caber em 60s Hobby.
+    // - Contexto MUITO pesado (>120k chars OU anexo grande) → Haiku 4.5 fallback
+    //   pra evitar timeout (Opus 4.7 + livro inteiro = 80-120s, estoura).
+    // - COST_SAVING_MODE=true força Haiku em tudo (modo econômico).
+    const costSaving = process.env.COST_SAVING_MODE === 'true';
 
     const promptSize = prompt.length;
-    const hasHeavyAttachment = augmentedFiles.some(f => (f.b64 || '').length > 100_000);
-    const heavyContext = promptSize > 40_000 || hasHeavyAttachment;
+    const hasHugeAttachment = augmentedFiles.some(f => (f.b64 || '').length > 500_000);
+    const veryHeavyContext = promptSize > 120_000 || hasHugeAttachment;
 
-    const useFast = costSaving || heavyContext;
+    const useFast = costSaving || veryHeavyContext;
     const modelChoice = useFast ? CLAUDE_MODEL_FAST : CLAUDE_MODEL_FULL;
 
     const pipelineResult = await runPipeline({
@@ -112,9 +116,9 @@ export default async function handler(req, res) {
       model: modelChoice,
       userMessage,
       tipoDeSaida: tipo_de_saida,
-      maxRetries: useFast ? 1 : 2,
-      skipCritic: useFast,
-      maxTokens: useFast ? 4000 : undefined,
+      maxRetries: 1,                    // sempre 1 (cabe em 60s)
+      skipCritic: true,                 // sempre skip (cabe em 60s)
+      maxTokens: useFast ? 4000 : 6000, // Opus pode ir mais alto, mas 6k cabe
     });
 
     const result = pipelineResult.content;
